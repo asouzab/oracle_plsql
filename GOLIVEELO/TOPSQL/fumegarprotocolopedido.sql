@@ -1,0 +1,49 @@
+
+
+select ent.* from CPT.ENTREGA ent
+inner join CPT.HISTORICO_STATUS_ENTREGA hse
+on ent.CD_AUTORIZACAO_ENTREGA = hse.CD_AUTORIZACAO_ENTREGA
+--UPDATE CPT.ENTREGA
+--SET SG_STATUS = 'A'
+
+where 1=1 
+--and ds_log_sap like '%ALTERADO PARA  A -%'
+--AND ent.CD_AUTORIZACAO_ENTREGA = 132204
+and hse.cd_status_entrega = 6
+--and ds_log_sap is null
+and sg_status in ('Ax', 'Cx', 'Px', 'R' ) AND ABS(NVL(QT_QUANTIDADE,0) - NVL(QT_FORNECIDO,0)) >0
+
+
+/*
+AND CD_AUTORIZACAO_ENTREGA IN ( 43769,
+43871);
+
+
+/*
+
+
+44188,
+44081,
+112772,
+121434,
+121344,
+121180,
+123128,
+123150,
+121514,
+121080,
+125686,
+125689,
+125691,
+125182,
+124523,
+124832,
+124831,
+126945,
+126920,
+126930
+)
+
+*/
+
+;

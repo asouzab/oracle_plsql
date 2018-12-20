@@ -1,0 +1,83 @@
+select * from VW_ELO_AGENDAMENTO_WEEK_PLAN
+SELECT * FROM VW_ELO_AGENDAMENTO_DAY_PLAN
+
+
+
+select * from vnd.elo_status
+
+3843
+3844
+3856
+
+SELECT * FROM VND.ELO_CARTEIRA WHERE CD_ELO_CARTEIRA = '3844' OR CD_ELO_CARTEIRA_GROUPING = 66358
+
+UPDATE VND.ELO_CARTEIRA 
+SET CD_STATUS_CUSTOMER_SERVICE = 11
+WHERE CD_ELO_CARTEIRA_GROUPING = 64221
+
+
+UPDATE VND.ELO_CARTEIRA 
+SET CD_STATUS_CUSTOMER_SERVICE = NULL
+WHERE CD_ELO_CARTEIRA_GROUPING = 66357
+
+UPDATE VND.ELO_CARTEIRA 
+SET 
+--QT_AGENDADA_CONFIRMADA  = 0,
+--CD_STATUS_REPLAN = 33,
+CD_STATUS_CUSTOMER_SERVICE = NULL
+
+
+WHERE CD_ELO_CARTEIRA_GROUPING = 66358
+AND QT_AGENDADA_CONFIRMADA =0
+
+
+
+
+SELECT * FROM VND.ELO_CARTEIRA 
+--WHERE 
+--CD_STATUS_REPLAN = 33,
+--QT_AGENDADA_CONFIRMADA = 0
+WHERE 
+CD_ELO_CARTEIRA_GROUPING = 66358
+AND QT_AGENDADA_CONFIRMADA =0
+
+SELECT * FROM VND.ELO_CARTEIRA 
+WHERE CD_ELO_CARTEIRA = 3844 OR CD_ELO_CARTEIRA_GROUPING = 66358
+
+select * from vnd.elo_agendamento
+where CD_WEEK = 'W162018'
+AND CD_CENTRO_EXPEDIDOR = '6100'
+
+UPDATE elo_agendamento
+SET CD_ELO_STATUS = 8
+WHERE CD_ELO_AGENDAMENTO = 11;
+
+
+SELECT * FROM VND.ELO_CARTEIRA 
+WHERE NU_ORDEM_VENDA IN ( '0002343960', '0002334270')
+
+SELECT * FROM elo_agendamento
+WHERE CD_ELO_AGENDAMENTO = 7;
+
+
+UPDATE elo_agendamento
+SET CD_ELO_STATUS = 8
+WHERE CD_ELO_AGENDAMENTO = 6;
+
+6
+
+select * from vnd.elo_carteira
+where cd_elo_carteira = 2222
+
+select * from vnd.elo_vbak_protocolo
+where cd_elo_carteira = 2222
+
+select * from cpt.entrega 
+where 'R121088KX1' = nu_protocolo_entrega 
+
+
+select * from cpt.autorizacao_entrega 
+where cd_autorizacao_entrega = 121088
+
+select * from cpt.autorizacao_entrega 
+where cd_cooperativa_filial is not null and cd_cooperado is not null
