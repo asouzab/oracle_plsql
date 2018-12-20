@@ -1,0 +1,10 @@
+NL-08014: Message 8014 not found; No message file for product=NETWORK, facility=NL	   []
+ NL-08015: Message 8015 not found; No message file for product=NETWORK, facility=NL
+  ORA-48165: falta ao usuário a permissão de ler, gravar ou executar no diretório-base de ADR especificado []
+User inputted base directory is invalid [48187] [C:\Oracle\product\11.2.0\dbhome_1\log]
+
+NL-08014: Message 8014 not found; No message file for product=NETWORK, facility=NL	   []
+ NL-08015: Message 8015 not found; No message file for product=NETWORK, facility=NL
+  ORA-48165: falta ao usuário a permissão de ler, gravar ou executar no diretório-base de ADR especificado []
+User inputted base directory is invalid [48187] [C:\Oracle\product\11.2.0\dbhome_1\log]
+

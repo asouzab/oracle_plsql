@@ -1,0 +1,2142 @@
+CREATE OR REPLACE PACKAGE BODY VND.GX_ELO_FACTORY AS
+
+    PROCEDURE PX_LISTAR_FABRICA_OT(
+        P_POLO                  IN ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CENTRO                IN ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_MAQUINA               IN ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_SEMANA                IN ELO_AGENDAMENTO.CD_WEEK%TYPE,
+        P_CD_RAW_MATERIAL_GROUP IN CTF.PRODUTO_RAW_MATERIAL_GROUP.CD_RAW_MATERIAL_GROUP%TYPE,
+        P_CD_TIPO_AGENDAMENTO   IN VND.ELO_CARTEIRA.CD_TIPO_AGENDAMENTO%TYPE,
+        P_RETORNO               OUT t_cursor) 
+    
+    AS
+    
+	V_CD_ST_APREP  VND.ELO_CARTEIRA.CD_STATUS_REPLAN%TYPE:= VND.GX_ELO_COMMON.FX_ELO_STATUS('TWORK', 'APREP');
+	V_CD_ST_RPREP  VND.ELO_CARTEIRA.CD_STATUS_REPLAN%TYPE:= VND.GX_ELO_COMMON.FX_ELO_STATUS('TWORK', 'RPREP');    
+    
+    BEGIN
+        OPEN P_RETORNO FOR 
+SELECT  
+
+  CD_WEEK
+, CODIGO_CARTEIRA CD_ELO_CARTEIRA
+, CODIGO_CARTEIRA
+, ITEM_AGENDAMENTO CD_ELO_AGENDAMENTO_ITEM							
+, ITEM_AGENDAMENTO 
+, TIPO_AGENDAMENTO SCHEDULINGTYPE
+, ATRASADA SG_DESTINO_BACKLOG_CIF
+, ATRASADA 
+, PRIORIDADE PRIORITY
+, PRIORIDADE
+, IC_EMERGENCIAL
+, EMERGENCIALS1
+, EMERGENCIALS1 EMERGENCY
+, ORDENACAO NU_ORDEM 
+, ORDENACAO
+, ORDENACAO ORDERING
+, CENTRO CD_CENTRO_EXPEDIDOR	
+, CENTRO
+, CENTRO CENTER
+, TIPO_AGENDAMENTO
+, DH_REPLAN
+, CD_STATUS_REPLAN
+, CONTRATO NU_CONTRATO_SAP							
+, CONTRATO
+, CONTRATO CONTRACT
+, COD_ELO_AGENDAMENTO CD_ELO_AGENDAMENTO	
+, COD_ELO_AGENDAMENTO CODSCHEDULING
+, CD_ELO_STATUS										
+, COD_STATUS
+, COD_STATUS CODSTATUS
+, ORDEM_VENDA NU_ORDEM_VENDA										
+, ORDEM_VENDA
+, ORDEM_VENDA "ORDER"
+, CODIGO_SUPERVISOR
+, CODIGO_SUPERVISOR SUPERVISOR
+, CODIGO_PRODUTO CD_PRODUTO_SAP										
+, CODIGO_PRODUTO
+, DESCRICAO NO_PRODUTO_SAP										
+, DESCRICAO
+, DESCRICAO "DESCRIPTION"									
+, PRODUTO
+, PRODUTO PRODUCT
+, CLIENTE_RECEBEDOR CD_CLIENTE_RECEBEDOR								
+, CLIENTE_RECEBEDOR
+, CLIENTE_RECEBEDOR CUSTOMERRECEIVES
+, NOME_CLIENTE NO_CLIENTE_RECEBEDOR							
+, NOME_CLIENTE
+, NOME_CLIENTE CUSTOMERNAME
+, COMPARTILHAMENTO_COTA CD_COTA_COMPARTILHADA			
+, COMPARTILHAMENTO_COTA
+, COMPARTILHAMENTO_COTA SHAREQUOTA
+, BIG_BAG
+, BIG_BAG BIGBAG
+, ENSACADO
+, ENSACADO BAGGED
+, GRANEL
+					
+, AGENDADO
+, AGENDADO SCHEDULED
+, ENSACADO
+, GROUPCA.REAL
+, CASE WHEN (NVL(TRIM(ORDEM_VENDA),'0')) = '0' THEN 0 ELSE LIBERADO END RELEASED											
+, CASE WHEN (NVL(TRIM(ORDEM_VENDA),'0')) = '0' THEN 0 ELSE LIBERADO END LIBERADO
+, PROGRAMADA QT_AGENDADA_CONFIRMADA								
+, PROGRAMADA
+, PROGRAMADA PROGRAMMED
+, IC_CORTADO IC_CORTADO_FABRICA							
+, IC_CORTADO
+, STATUS
+, VOLUME_ATUALIZADO
+, GROUPCA.MOD CD_INCOTERMS 										
+, GROUPCA.MOD
+
+, LIBERADO_REFRESH QT_SALDO_REFRESH
+, LIBERADO_REFRESH
+, LIBERADO_REFRESH RELEASEDREFRESH
+, PROGRAMADO_REFRESH QT_AGENDADA_REFRESH					
+, PROGRAMADO_REFRESH
+, PROGRAMADO_REFRESH PROGRAMMEDREFRESH
+, AJUSTE_VOLUME QT_AGENDADA_FABRICA						
+, AJUSTE_VOLUME
+, AJUSTE_VOLUME AJUSTVOLUM
+				
+, CORTAR
+, CORTAR CUT
+, CENTRO_DESDOBRO CD_CENTRO_EXPEDIDOR_FABRICA				
+, CENTRO_DESDOBRO
+, CENTRO_DESDOBRO CENTERUNFOLD
+, BLOQUEIO_TORRE
+, CD_TIPO_AGENDAMENTO
+, IC_PERMITIR_CS
+, DS_CAPACIDADE   --ADD CAPACIDADE BY ADRIANO 2018.02.26
+, CD_STATUS_TORRE_FRETES
+, 'XX' SG_STATUS
+, 0 MAIL
+, CURRENT_DATE DH_REFRESH
+, 'ITEM' SchedulingItem
+, 'LATE' Late
+, 0 TOTAL_CAPACIDADE
+
+
+FROM 
+(
+ 
+    SELECT 
+          AGE.CD_WEEK
+        , EC.CD_ELO_CARTEIRA									"CODIGO_CARTEIRA"
+        , EC.CD_ELO_AGENDAMENTO_ITEM							"ITEM_AGENDAMENTO" -- NÃO EXIBIR NO GRID
+        , NVL(EC.SG_DESTINO_BACKLOG_CIF,0)						"ATRASADA" -- NÃO EXIBIR NO GRID
+        , NVL(EPO.DS_PRIORITY_OPTION, '-')						"PRIORIDADE"
+        , CASE WHEN NVL(AGWEEK.QT_EMERGENCIAL,0) > 0 THEN 'S' 
+                ELSE 'N' 
+          END IC_EMERGENCIAL
+        , CASE WHEN NVL(AGWEEK.QT_EMERGENCIAL,0) > 0 THEN 'Sim' 
+                ELSE 'Não' 
+          END 													"EMERGENCIALS1"
+        , EC.NU_ORDEM "ORDENACAO"
+        , EC.CD_CENTRO_EXPEDIDOR								"CENTRO"
+        , NVL(ST_TAG.DS_STATUS,'0')								"TIPO_AGENDAMENTO"
+        , DH_REPLAN
+       -- , EC.CD_STATUS_REPLAN
+        , ST_REPLAN.DS_STATUS CD_STATUS_REPLAN
+--        , CASE 
+--           WHEN EC.CD_STATUS_REPLAN = VND.GX_ELO_COMMON.FX_ELO_STATUS('TWORK', 'APREP') THEN 'APROVADO REPLAN'
+--            WHEN EC.CD_STATUS_REPLAN = VND.GX_ELO_COMMON.FX_ELO_STATUS('TWORK', 'RPREP') THEN 'REPROVADO REPLAN'
+--            WHEN (EC.CD_STATUS_REPLAN IS NULL AND DH_REPLAN IS NOT NULL) THEN 'REPROVADO REPLAN'
+--            ELSE '-'
+--          END 												"CD_STATUS_REPLAN"		  
+		  
+        , EC.NU_CONTRATO_SAP									"CONTRATO"
+        , AGE.CD_ELO_AGENDAMENTO								"COD_ELO_AGENDAMENTO"
+        , AGE.CD_ELO_STATUS										"COD_STATUS"
+        , EC.NU_ORDEM_VENDA										"ORDEM_VENDA"
+        , CONCAT(EC.CD_SALES_GROUP, CONCAT(' - ', EC.NO_SALES_GROUP ))	"CODIGO_SUPERVISOR"
+        , EC.CD_PRODUTO_SAP										"CODIGO_PRODUTO"
+        , EC.NO_PRODUTO_SAP										"DESCRICAO"
+        , EC.CD_PRODUTO_SAP										"PRODUTO"
+        , EC.CD_CLIENTE_RECEBEDOR								"CLIENTE_RECEBEDOR"
+        , NVL(NO_CLIENTE_RECEBEDOR,0)							"NOME_CLIENTE"
+        , NVL((SELECT AGITEM.CD_COTA_COMPARTILHADA 
+            FROM VND.ELO_AGENDAMENTO_ITEM AGITEM 
+            WHERE AGITEM.CD_ELO_AGENDAMENTO_ITEM = EC.CD_ELO_AGENDAMENTO_ITEM 
+            AND ROWNUM =1 ),0) "COMPARTILHAMENTO_COTA"
+        , CASE WHEN (
+            SELECT COUNT(1)
+              FROM VND.ELO_AGENDAMENTO_WEEK WES
+              INNER JOIN VND.ELO_AGENDAMENTO_DAY ECD
+              ON WES.CD_ELO_AGENDAMENTO_WEEK = ECD.CD_ELO_AGENDAMENTO_WEEK
+             WHERE WES.CD_ELO_AGENDAMENTO_ITEM = EC.CD_ELO_AGENDAMENTO_ITEM
+               AND ECD.CD_GRUPO_EMBALAGEM = 'B'
+        ) > 0 THEN 'X' ELSE '-' END                             "BIG_BAG"
+        , CASE WHEN (
+            SELECT COUNT(1)
+              FROM VND.ELO_AGENDAMENTO_WEEK WES
+              INNER JOIN VND.ELO_AGENDAMENTO_DAY ECD
+              ON WES.CD_ELO_AGENDAMENTO_WEEK = ECD.CD_ELO_AGENDAMENTO_WEEK
+             WHERE WES.CD_ELO_AGENDAMENTO_ITEM = EC.CD_ELO_AGENDAMENTO_ITEM
+               AND ECD.CD_GRUPO_EMBALAGEM = 'S'
+        ) > 0 THEN 'X' ELSE '-' END 
+                                                                "ENSACADO"
+        , CASE WHEN (
+            SELECT COUNT(1)
+              FROM VND.ELO_AGENDAMENTO_WEEK WES
+              INNER JOIN VND.ELO_AGENDAMENTO_DAY ECD
+              ON WES.CD_ELO_AGENDAMENTO_WEEK = ECD.CD_ELO_AGENDAMENTO_WEEK
+             WHERE WES.CD_ELO_AGENDAMENTO_ITEM = EC.CD_ELO_AGENDAMENTO_ITEM
+               AND ECD.CD_GRUPO_EMBALAGEM = 'G'
+        ) > 0 THEN 'X' ELSE '-' END 							"GRANEL"
+        , NVL(( SELECT SUM(WEEK.QT_SEMANA) QT_SEMANA 
+                FROM VND.ELO_AGENDAMENTO_WEEK WEEK 
+                WHERE WEEK.CD_ELO_AGENDAMENTO_ITEM = EC.CD_ELO_AGENDAMENTO_ITEM),0)								"AGENDADO"
+        , ( SELECT NVL(SUM(CA.QT_SALDO), 0) 
+            FROM VND.ELO_CARTEIRA CA 
+            WHERE CA.CD_ELO_AGENDAMENTO_ITEM = EC.CD_ELO_AGENDAMENTO_ITEM 
+            AND CA.QT_AGENDADA <> 0) 							"REAL"
+        , EC.QT_SALDO											"LIBERADO"
+        , EC.QT_AGENDADA_CONFIRMADA								"PROGRAMADA"
+        , NVL(EC.IC_CORTADO_FABRICA,0)							"IC_CORTADO"
+        , CASE 
+            WHEN (NVL(EC.QT_AGENDADA_CONFIRMADA,0) <> 0 
+			AND (EC.IC_CORTADO_FABRICA <> 1 
+			OR EC.IC_CORTADO_FABRICA IS NULL)) THEN 'PROGRAMAR' 
+            ELSE 'NÃO PROGRAMAR' 
+          END 													"STATUS"
+		, CASE
+            WHEN CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.FX_ELO_STATUS('TIPAG', 'PLAN') 
+                AND EC.QT_AGENDADA_CONFIRMADA = 0 
+                AND (NVL(EC.QT_AGENDADA_FABRICA, 1) > 0 ) 
+                AND (NVL(EC.QT_AGENDADA_SAP, 1) > 0 )
+                AND (NVL(EC.QT_AGENDADA_REFRESH, 1) > 0 ) 
+                AND (NVL(EC.QT_AGENDADA_CELULA, 1) > 0 )
+              --  AND (EC.IC_CORTADO_FABRICA <> '1' OR EC.IC_CORTADO_FABRICA IS NULL) 
+                THEN 'Antecipado REPLAN'
+                
+            WHEN EC.QT_AGENDADA > 0 AND EC.QT_AGENDADA_CONFIRMADA = 0 AND EC.DH_AJUSTE_SAP IS NOT NULL 
+            THEN 'Matéria Prima - ' || TO_CHAR(EC.DH_AJUSTE_SAP,'DD/MM/YYYY HH:MI')     
+                
+			WHEN NVL(EC.DH_FABRICA,TO_DATE('01-JAN-00')) > NVL(EC.DH_CORTADO_FABRICA,TO_DATE('01-JAN-00')) AND 
+				NVL(EC.DH_FABRICA,TO_DATE('01-JAN-00')) > NVL(EC.DH_REFRESH,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_FABRICA,TO_DATE('01-JAN-00')) > NVL(EC.DH_AJUSTE_SAP,TO_DATE('01-JAN-00')) AND 
+				NVL(EC.DH_FABRICA,TO_DATE('01-JAN-00')) > NVL(EC.DH_MODIFICACAO_CELL_ATT,TO_DATE('01-JAN-00')) 
+                THEN 'Customer Service - ' || TO_CHAR(EC.DH_FABRICA, 'DD/MM/YYYY HH:MI')
+			WHEN NVL(EC.DH_CORTADO_FABRICA,TO_DATE('01-JAN-00')) > NVL(EC.DH_FABRICA,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_CORTADO_FABRICA,TO_DATE('01-JAN-00')) > NVL(EC.DH_REFRESH,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_CORTADO_FABRICA,TO_DATE('01-JAN-00')) > NVL(EC.DH_AJUSTE_SAP,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_CORTADO_FABRICA,TO_DATE('01-JAN-00')) > NVL(EC.DH_MODIFICACAO_CELL_ATT,TO_DATE('01-JAN-00')) 
+                THEN 'Customer Service - ' || TO_CHAR(EC.DH_CORTADO_FABRICA, 'DD/MM/YYYY HH:MI')
+			WHEN NVL(EC.DH_REFRESH,TO_DATE('01-JAN-00')) > NVL(EC.DH_FABRICA,TO_DATE('01-JAN-00')) AND 
+				NVL(EC.DH_REFRESH,TO_DATE('01-JAN-00')) > NVL(EC.DH_CORTADO_FABRICA,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_REFRESH,TO_DATE('01-JAN-00')) > NVL(EC.DH_AJUSTE_SAP,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_REFRESH,TO_DATE('01-JAN-00')) > NVL(EC.DH_MODIFICACAO_CELL_ATT,TO_DATE('01-JAN-00')) 
+                THEN 'Customer Service - ' || TO_CHAR(EC.DH_REFRESH,'DD/MM/YYYY HH:MI') 
+			WHEN NVL(EC.DH_AJUSTE_SAP,TO_DATE('01-JAN-00')) > NVL(EC.DH_FABRICA,TO_DATE('01-JAN-00')) AND 
+				NVL(EC.DH_AJUSTE_SAP,TO_DATE('01-JAN-00')) > NVL(EC.DH_CORTADO_FABRICA,TO_DATE('01-JAN-00')) AND 
+				NVL(EC.DH_AJUSTE_SAP,TO_DATE('01-JAN-00')) > NVL(EC.DH_REFRESH,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_AJUSTE_SAP,TO_DATE('01-JAN-00')) > NVL(EC.DH_MODIFICACAO_CELL_ATT,TO_DATE('01-JAN-00'))
+                THEN 'Matéria Prima - ' || TO_CHAR(EC.DH_AJUSTE_SAP,'DD/MM/YYYY HH:MI') 
+			WHEN NVL(EC.DH_MODIFICACAO_CELL_ATT,TO_DATE('01-JAN-00')) > NVL(EC.DH_FABRICA,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_MODIFICACAO_CELL_ATT,TO_DATE('01-JAN-00')) > NVL(EC.DH_CORTADO_FABRICA,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_MODIFICACAO_CELL_ATT,TO_DATE('01-JAN-00')) > NVL(EC.DH_REFRESH,TO_DATE('01-JAN-00')) AND
+				NVL(EC.DH_MODIFICACAO_CELL_ATT,TO_DATE('01-JAN-00')) > NVL(EC.DH_AJUSTE_SAP,TO_DATE('01-JAN-00')) 
+                THEN 'Célula de Atendimento - ' || TO_CHAR(EC.DH_MODIFICACAO_CELL_ATT,'DD/MM/YYYY HH:MI')
+			ELSE 'Comercial' 
+			END 												"VOLUME_ATUALIZADO"
+        , EC.CD_INCOTERMS 										"MOD"
+        , NVL(EC.QT_SALDO_REFRESH,0) 							"LIBERADO_REFRESH"
+        , NVL(EC.qt_agendada_refresh, 0) 						"PROGRAMADO_REFRESH"
+        , NVL(EC.QT_AGENDADA_FABRICA,0) 						"AJUSTE_VOLUME"
+        , NVL(EC.ic_cortado_fabrica,0) 							"CORTAR"
+        , NVL(EC.CD_CENTRO_EXPEDIDOR_FABRICA,0) 				"CENTRO_DESDOBRO"
+        , GX_ELO_FACTORY.FX_BLOCK_TORRE_FRETES(EC.CD_ELO_CARTEIRA) "BLOQUEIO_TORRE"
+        , EC.CD_TIPO_AGENDAMENTO
+        , AGE.CD_ELO_STATUS
+        , EC.IC_PERMITIR_CS
+        , EC.CD_STATUS_TORRE_FRETES
+        , EC.DS_CAPACIDADE   --ADD CAPACIDADE BY ADRIANO 2018.02.26
+        FROM VND.ELO_CARTEIRA EC
+       -- LEFT JOIN VND.ELO_AGENDAMENTO_ITEM AGITEM 
+		--ON EC.CD_ELO_AGENDAMENTO_ITEM = AGITEM.CD_ELO_AGENDAMENTO_ITEM
+--        LEFT JOIN VND.ELO_CARTEIRA_DAY AGDAY 
+--		ON EC.CD_ELO_CARTEIRA = AGDAY.CD_ELO_CARTEIRA
+        LEFT JOIN VND.ELO_AGENDAMENTO_WEEK AGWEEK 
+		ON EC.CD_ELO_AGENDAMENTO_ITEM =  AGWEEK.CD_ELO_AGENDAMENTO_ITEM
+        LEFT JOIN VND.ELO_STATUS ST_TAG 
+		ON EC.CD_TIPO_AGENDAMENTO = ST_TAG.CD_ELO_STATUS
+        LEFT JOIN VND.ELO_PRIORITY_OPTION  EPO ON EC.CD_ELO_PRIORITY_OPTION = EPO.CD_ELO_PRIORITY_OPTION 
+        INNER JOIN VND.ELO_AGENDAMENTO AGE 
+		ON EC.CD_ELO_AGENDAMENTO = AGE.CD_ELO_AGENDAMENTO
+       -- LEFT JOIN CTF.PRODUTO_RAW_MATERIAL_GROUP RMGP 
+	--	ON EC.CD_PRODUTO_SAP = RMGP.CD_PRODUTO_SAP
+--      LEFT JOIN VND.ELO_CARTEIRA_TORRE_FRETES TF
+--		ON EC.CD_ELO_CARTEIRA = TF.CD_ELO_CARTEIRA
+        LEFT JOIN VND.ELO_STATUS ST_REPLAN 
+		ON EC.CD_STATUS_REPLAN = ST_REPLAN.CD_ELO_STATUS
+        WHERE 
+        EC.IC_ATIVO = 'S'
+        AND AGE.IC_ATIVO = 'S'
+        AND AGE.CD_WEEK = P_SEMANA
+--        AND (P_CD_RAW_MATERIAL_GROUP IS NOT NULL AND EXISTS (SELECT 1 
+--                    FROM CTF.PRODUTO_RAW_MATERIAL_GROUP RMGP 
+--                    WHERE EC.CD_PRODUTO_SAP = RMGP.CD_PRODUTO_SAP
+--                    AND (P_CD_RAW_MATERIAL_GROUP IS NULL OR RMGP.CD_RAW_MATERIAL_GROUP = P_CD_RAW_MATERIAL_GROUP)
+--                    ))
+
+        AND AGE.CD_ELO_STATUS >= (SELECT VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGFIN') FROM DUAL)
+        AND AGE.CD_ELO_STATUS <= (SELECT VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGENC') FROM DUAL)
+        AND (P_POLO IS NULL OR AGE.CD_POLO = P_POLO)
+        AND (P_MAQUINA IS NULL OR AGE.CD_MACHINE = P_MAQUINA)
+        AND (P_CENTRO IS NULL OR AGE.CD_CENTRO_EXPEDIDOR = P_CENTRO)
+       -- AND (P_CD_RAW_MATERIAL_GROUP IS NULL OR RMGP.CD_RAW_MATERIAL_GROUP = P_CD_RAW_MATERIAL_GROUP)
+        AND (NVL(P_CD_TIPO_AGENDAMENTO, 0) = 0 OR EC.CD_TIPO_AGENDAMENTO IS NOT NULL)
+
+) GROUPCA
+WHERE
+GROUPCA.MOD IS NOT NULL 
+GROUP BY 
+  CD_WEEK
+, CODIGO_CARTEIRA
+, ITEM_AGENDAMENTO 							
+, ATRASADA 
+, PRIORIDADE
+, IC_EMERGENCIAL
+, EMERGENCIALS1
+, ORDENACAO
+, CENTRO
+, TIPO_AGENDAMENTO
+, DH_REPLAN
+, CD_STATUS_REPLAN
+, CONTRATO
+, COD_ELO_AGENDAMENTO 
+, CD_ELO_STATUS										
+, COD_STATUS
+, ORDEM_VENDA
+, CODIGO_SUPERVISOR
+, CODIGO_PRODUTO
+, DESCRICAO
+, PRODUTO
+, CLIENTE_RECEBEDOR
+, NOME_CLIENTE
+, COMPARTILHAMENTO_COTA
+, BIG_BAG
+, ENSACADO
+, GRANEL
+, AGENDADO
+, ENSACADO
+, GROUPCA.REAL
+, LIBERADO
+, PROGRAMADA
+, IC_CORTADO
+, STATUS
+, VOLUME_ATUALIZADO
+, GROUPCA.MOD
+, LIBERADO_REFRESH
+, PROGRAMADO_REFRESH
+, AJUSTE_VOLUME
+, CORTAR
+, CENTRO_DESDOBRO
+, BLOQUEIO_TORRE
+, CD_TIPO_AGENDAMENTO
+, IC_PERMITIR_CS
+, DS_CAPACIDADE   --ADD CAPACIDADE BY ADRIANO 2018.02.26
+, CD_STATUS_TORRE_FRETES
+ORDER BY STATUS DESC, ORDENACAO ASC
+
+;
+
+
+    
+    END PX_LISTAR_FABRICA_OT;
+
+    PROCEDURE PX_LISTAR_FABRICA_TESTE(
+        P_POLO                  IN ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CENTRO                IN ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_MAQUINA               IN ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_SEMANA                IN ELO_AGENDAMENTO.CD_WEEK%TYPE,
+        P_CD_RAW_MATERIAL_GROUP IN CTF.PRODUTO_RAW_MATERIAL_GROUP.CD_RAW_MATERIAL_GROUP%TYPE,
+        P_CD_TIPO_AGENDAMENTO   IN VND.ELO_CARTEIRA.CD_TIPO_AGENDAMENTO%TYPE,
+        P_RETORNO               OUT t_cursor) 
+    
+    AS
+    
+    BEGIN
+    
+    OPEN P_RETORNO FOR 
+    SELECT NULL FROM DUAL;
+    
+    END PX_LISTAR_FABRICA_TESTE;
+
+
+
+    PROCEDURE PX_LISTAR_FABRICA(
+        P_POLO                  IN ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CENTRO                IN ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_MAQUINA               IN ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_SEMANA                IN ELO_AGENDAMENTO.CD_WEEK%TYPE,
+        P_CD_RAW_MATERIAL_GROUP IN CTF.PRODUTO_RAW_MATERIAL_GROUP.CD_RAW_MATERIAL_GROUP%TYPE,
+        P_CD_TIPO_AGENDAMENTO   IN VND.ELO_CARTEIRA.CD_TIPO_AGENDAMENTO%TYPE,
+        P_RETORNO               OUT t_cursor) 
+    
+    IS
+    
+    qry varchar2(5000);
+    
+    BEGIN
+    
+
+    
+    qry := 'SELECT NULL FROM DUAL;';   
+    
+    --dbms_output.put_line(qry);
+    OPEN P_RETORNO FOR qry;
+    
+    END PX_LISTAR_FABRICA;
+
+    PROCEDURE PX_FABRICA(
+        P_POLO                  IN ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CENTRO                IN ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_MAQUINA               IN ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_SEMANA                IN ELO_AGENDAMENTO.CD_WEEK%TYPE,
+        P_CD_RAW_MATERIAL_GROUP IN CTF.PRODUTO_RAW_MATERIAL_GROUP.CD_RAW_MATERIAL_GROUP%TYPE,
+        P_CD_TIPO_AGENDAMENTO   IN VND.ELO_CARTEIRA.CD_TIPO_AGENDAMENTO%TYPE,
+        p_page_size             IN NUMBER,
+        p_page                  IN NUMBER,
+        P_RETORNO               OUT t_cursor
+    ) 
+    
+    IS
+    
+    qry varchar2(5000);
+    
+    BEGIN
+    
+    qry := 'SELECT NULL FROM DUAL; ' ;
+
+    
+    OPEN P_RETORNO FOR qry;
+    
+    END PX_FABRICA;
+
+    PROCEDURE PX_FABRICA (
+        P_POLO                  IN ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CENTRO                IN ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_MAQUINA               IN ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_SEMANA                IN ELO_AGENDAMENTO.CD_WEEK%TYPE,
+        P_CD_RAW_MATERIAL_GROUP IN CTF.PRODUTO_RAW_MATERIAL_GROUP.CD_RAW_MATERIAL_GROUP%TYPE,
+        P_CD_TIPO_AGENDAMENTO   IN VND.ELO_CARTEIRA.CD_TIPO_AGENDAMENTO%TYPE,
+        P_RETORNO               OUT t_cursor
+    ) 
+    IS
+    BEGIN
+        OPEN P_RETORNO FOR
+        SELECT NULL FROM DUAL
+        ;
+    END PX_FABRICA;
+
+    PROCEDURE PX_STATUS_HEADER(
+        P_POLO              IN VND.ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CENTRO            IN VND.ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_MAQUINA           IN VND.ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_WEEK              IN VND.ELO_AGENDAMENTO.CD_WEEK%TYPE,
+        P_RETORNO           OUT t_cursor) 
+    
+    AS
+    
+    BEGIN
+    
+    OPEN P_RETORNO FOR 
+    SELECT DISTINCT ES.SG_STATUS, EA.DH_REFRESH
+    FROM VND.ELO_AGENDAMENTO EA
+    INNER JOIN VND.ELO_STATUS ES ON ES.CD_ELO_STATUS = EA.CD_ELO_STATUS
+    WHERE EA.CD_WEEK = P_WEEK
+    AND (P_POLO IS NULL OR EA.CD_POLO = P_POLO)
+    AND (P_CENTRO IS NULL OR EA.CD_CENTRO_EXPEDIDOR = P_CENTRO)
+    AND (P_MAQUINA IS NULL OR EA.CD_MACHINE = P_MAQUINA);
+    
+    END PX_STATUS_HEADER;
+    
+    PROCEDURE PU_ATUALIZA_SALDO(
+        P_CD_POLO               IN VND.ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CD_CENTRO_EXPEDIDOR   IN VND.ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_CD_MACHINE            IN VND.ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_CD_WEEK               IN VND.ELO_AGENDAMENTO.CD_WEEK%TYPE,
+        P_RETORNO               OUT t_cursor)
+    
+    IS
+    
+    v_count number;
+    iNU_QUANTIDADE              VND.PEDIDO.NU_QUANTIDADE%TYPE;
+    iNU_QUANTIDADE_ENTREGUE     VND.PEDIDO.NU_QUANTIDADE_ENTREGUE%TYPE;
+    iNU_QUANTIDADE_SALDO        VND.PEDIDO.NU_QUANTIDADE_SALDO%TYPE;
+    V_TRAVA VARCHAR2(1):='N';
+    
+    CURSOR C_CARTEIRA IS 
+    SELECT EC.NU_ORDEM_VENDA, EC.CD_ITEM_PEDIDO, EC.CD_ELO_CARTEIRA, EC.QT_AGENDADA_REFRESH, EC.QT_AGENDADA_CONFIRMADA
+    FROM VND.ELO_CARTEIRA EC
+    INNER JOIN VND.ELO_AGENDAMENTO EA ON EA.CD_ELO_AGENDAMENTO = EC.CD_ELO_AGENDAMENTO
+    WHERE EA.CD_WEEK = P_CD_WEEK
+    AND EC.QT_AGENDADA_CONFIRMADA > 0
+    AND (P_CD_POLO IS NULL OR EA.CD_POLO = P_CD_POLO)
+    AND (P_CD_CENTRO_EXPEDIDOR IS NULL OR EA.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+    AND (P_CD_MACHINE IS NULL OR EA.CD_MACHINE = P_CD_MACHINE);
+
+    C_LINHA C_CARTEIRA%ROWTYPE;
+    
+    BEGIN
+    
+    IF C_CARTEIRA%ISOPEN THEN
+    CLOSE C_CARTEIRA;
+    END IF;
+    
+    OPEN C_CARTEIRA;
+    LOOP
+    FETCH C_CARTEIRA into C_LINHA;
+    EXIT WHEN C_CARTEIRA%notfound;
+    
+        V_TRAVA:='N';
+    
+        v_count := 0;
+        BEGIN
+        SELECT NVL(COUNT(cd_pedido),0) INTO v_count
+        FROM VND.PEDIDO 
+        WHERE 
+        --CD_ITEM_PEDIDO = C_LINHA.CD_ITEM_PEDIDO
+        --AND 
+        NU_ORDEM_VENDA = C_LINHA.NU_ORDEM_VENDA;
+        EXCEPTION 
+        WHEN NO_DATA_FOUND THEN 
+        v_count:= 0;
+        WHEN OTHERS THEN 
+        v_count:=0;
+        
+        END;        
+        
+        IF v_count > 0 THEN
+        
+            BEGIN
+            SELECT      SUM(NVL(PED.NU_QUANTIDADE, 0))
+                        , SUM(NVL(PED.NU_QUANTIDADE_ENTREGUE, 0))
+                        , SUM(NVL(PED.NU_QUANTIDADE_SALDO, 0))
+            INTO        iNU_QUANTIDADE
+                        , iNU_QUANTIDADE_ENTREGUE
+                        , iNU_QUANTIDADE_SALDO
+            FROM        VND.PEDIDO PED
+            WHERE       
+                --PED.CD_ITEM_PEDIDO = C_LINHA.CD_ITEM_PEDIDO
+            --AND 
+            PED.NU_ORDEM_VENDA = C_LINHA.NU_ORDEM_VENDA;
+            --AND ROWNUM = 1;
+            EXCEPTION 
+            WHEN NO_DATA_FOUND THEN 
+            iNU_QUANTIDADE:= NULL;
+            WHEN OTHERS THEN 
+            iNU_QUANTIDADE:=NULL;
+            
+            END;            
+
+            -- ALTERADO POR SOLICITAÇÃO DE PAULO KALIL EM 19/01/2017
+            -- SE UM DOS VALORES FOR NULL, DESPREZA A ATUALIZACAO
+            IF (iNU_QUANTIDADE IS NOT NULL OR iNU_QUANTIDADE_ENTREGUE IS NOT NULL OR iNU_QUANTIDADE_SALDO IS NOT NULL) THEN
+                BEGIN
+                    BEGIN
+                    -- ATUALIZA A CARTEIRA 
+                    UPDATE      VND.ELO_CARTEIRA EC
+                    SET         EC.CD_USUARIO_REFRESH = 4198
+                                , EC.DH_REFRESH = CURRENT_DATE
+                                , EC.QT_PROGRAMADA_REFRESH = iNU_QUANTIDADE
+                                , EC.QT_ENTREGUE_REFRESH = iNU_QUANTIDADE_ENTREGUE
+                                , EC.QT_SALDO_REFRESH = iNU_QUANTIDADE_SALDO
+                                , EC.QT_AGENDADA_CONFIRMADA = CASE WHEN iNU_QUANTIDADE_SALDO < EC.QT_AGENDADA_CONFIRMADA THEN iNU_QUANTIDADE_SALDO ELSE EC.QT_AGENDADA_CONFIRMADA END
+                                , EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0002, "APP": "GX_ELO_FACTORY.PU_ATUALIZA_SALDO",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA_C_LINHA", "VAL":' || NVL(TO_CHAR(C_LINHA.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_PROGRAMADA_REFRESH", "VAL":' || TO_CHAR(iNU_QUANTIDADE) ||  '},' ||
+                                '{"NAME": "QT_ENTREGUE_REFRESH", "VAL":' || TO_CHAR(iNU_QUANTIDADE_ENTREGUE) ||  '},' ||
+                                '{"NAME": "QT_SALDO_REFRESH", "VAL":' || TO_CHAR(iNU_QUANTIDADE_SALDO) || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)
+
+                                
+                    WHERE       EC.CD_ELO_CARTEIRA = C_LINHA.CD_ELO_CARTEIRA;
+                    --AND         EC.CD_ITEM_PEDIDO = C_LINHA.CD_ITEM_PEDIDO;
+                
+                EXCEPTION 
+                    WHEN NO_DATA_FOUND THEN 
+                        BEGIN
+                        V_TRAVA:= 'S';
+                        ROLLBACK;
+                        END;
+                    WHEN OTHERS THEN 
+                        BEGIN
+                        V_TRAVA:= 'S';
+                        ROLLBACK;
+                        END;
+                    END;                                
+                BEGIN
+                -- ATUALIZA ELO_AGENDAMENTO
+                UPDATE VND.ELO_AGENDAMENTO EA
+                SET EA.DH_REFRESH = CURRENT_DATE
+                WHERE EA.CD_WEEK = P_CD_WEEK
+                AND (P_CD_POLO IS NULL OR EA.CD_POLO = P_CD_POLO)
+                AND (P_CD_MACHINE IS NULL OR EA.CD_MACHINE = P_CD_MACHINE)
+                AND (P_CD_CENTRO_EXPEDIDOR IS NULL OR EA.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR);
+             
+                COMMIT;
+                EXCEPTION 
+                WHEN NO_DATA_FOUND THEN 
+                BEGIN
+                V_TRAVA:= 'S';
+                ROLLBACK;
+                END;
+                WHEN OTHERS THEN 
+                BEGIN
+                V_TRAVA:= 'S';
+                ROLLBACK;
+                END;
+                
+                END;                
+                
+                
+                END;
+            END IF;
+        END IF;
+    END LOOP;
+    
+    CLOSE C_CARTEIRA;
+    
+    
+    BEGIN
+    PU_ATUALIZA_CAPACIDADE(
+            P_CD_POLO   ,           
+        P_CD_CENTRO_EXPEDIDOR  , 
+        P_CD_MACHINE    ,       
+        P_CD_WEEK   );  
+    EXCEPTION
+    WHEN OTHERS THEN 
+        RAISE_APPLICATION_ERROR(
+        -20001,
+        'ERRO ENCONTRADO - '
+         || SQLCODE
+         || ' -ERROR- '
+         || SQLERRM
+    );
+    END;
+        
+    
+    OPEN P_RETORNO FOR
+    SELECT '1' AS P_SUCESSO
+    FROM DUAL;
+    
+    EXCEPTION
+    WHEN OTHERS THEN
+        BEGIN
+            OPEN P_RETORNO FOR
+            SELECT '0' AS P_SUCESSO
+            FROM DUAL;
+            ROLLBACK;
+        END;
+    
+    END PU_ATUALIZA_SALDO;
+    
+    PROCEDURE PU_ENVIAR_DEVOLUTIVA(
+        P_CD_POLO               IN VND.ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CD_CENTRO_EXPEDIDOR   IN VND.ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_CD_MACHINE            IN VND.ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_CD_WEEK               IN VND.ELO_AGENDAMENTO.CD_WEEK%TYPE,
+        P_RETORNO               OUT t_cursor)
+    
+    IS
+    
+    vStatusCode                 NUMBER;
+    
+    BEGIN
+    
+    -- GET STATUS ID BY CODE NAME
+    BEGIN 
+    SELECT VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'PLAN') 
+    INTO vStatusCode
+    FROM DUAL;
+    EXCEPTION 
+    WHEN NO_DATA_FOUND THEN 
+    vStatusCode:=null;
+    WHEN OTHERS THEN 
+    vStatusCode:=null;
+    END;
+    
+    -- UPDATE STATUS TO 'PLAN'
+    BEGIN
+    UPDATE      VND.ELO_AGENDAMENTO EAG
+    SET         EAG.CD_ELO_STATUS = vStatusCode
+    WHERE       EAG.CD_ELO_AGENDAMENTO IN (     
+                    SELECT DISTINCT IIEA.CD_ELO_AGENDAMENTO
+                    FROM VND.ELO_AGENDAMENTO IIEA
+                    WHERE IIEA.CD_WEEK = P_CD_WEEK
+                    AND EAG.CD_ELO_AGENDAMENTO = IIEA.CD_ELO_AGENDAMENTO
+                    AND (P_CD_POLO IS NULL OR IIEA.CD_POLO = P_CD_POLO)
+                    AND (P_CD_CENTRO_EXPEDIDOR IS NULL OR IIEA.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+                    AND (P_CD_MACHINE IS NULL OR IIEA.CD_MACHINE = P_CD_MACHINE))
+                    AND EAG.CD_ELO_STATUS < vStatusCode;  -- ADD TO DOUBLE CHECK IF THE STATUS IS ALREADY ABOVE PLAN 2018-04-17 ADRIANO
+    COMMIT;
+    EXCEPTION 
+    WHEN NO_DATA_FOUND THEN 
+    vStatusCode:=null;
+    WHEN OTHERS THEN 
+    vStatusCode:=null;
+    
+    END;    
+    
+    -- GET STATUS ID BY CODE NAME
+    SELECT VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'PLAN') 
+    INTO vStatusCode
+    FROM DUAL;
+    
+    -- UPDATE ALL ELO_CARTEIRA RECORDS TO ORIGINAL
+    BEGIN
+    UPDATE      VND.ELO_CARTEIRA EC
+    SET         EC.CD_TIPO_AGENDAMENTO = vStatusCode
+    WHERE       EC.CD_ELO_CARTEIRA IN (     
+                    SELECT ECI.CD_ELO_CARTEIRA
+                    FROM VND.ELO_CARTEIRA ECI
+                    INNER JOIN VND.ELO_AGENDAMENTO EA ON EA.CD_ELO_AGENDAMENTO = ECI.CD_ELO_AGENDAMENTO 
+                    WHERE (ECI.QT_AGENDADA_CONFIRMADA >0)
+                    AND ECI.CD_ELO_CARTEIRA = EC.CD_ELO_CARTEIRA
+                    AND (ECI.CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'ORIGINAL')
+                        OR ECI.CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'INCLUSAO'))
+                    AND (P_CD_WEEK IS NULL OR EA.CD_WEEK = P_CD_WEEK)
+                    AND (P_CD_POLO IS NULL OR EA.CD_POLO = P_CD_POLO)
+                    AND (P_CD_CENTRO_EXPEDIDOR IS NULL OR EA.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+                    AND (P_CD_MACHINE IS NULL OR EA.CD_MACHINE = P_CD_MACHINE));
+    COMMIT;
+    END;
+    
+    GX_ELO_FACTORY.PU_VERIFICA_AGENDAMENTO_CIF(P_CD_POLO, P_CD_CENTRO_EXPEDIDOR, P_CD_MACHINE, P_CD_WEEK);
+
+    OPEN P_RETORNO FOR
+    SELECT '1' AS P_SUCESSO
+    FROM DUAL;
+    
+    EXCEPTION
+    WHEN OTHERS THEN
+        BEGIN
+            OPEN P_RETORNO FOR
+            SELECT '0' AS P_SUCESSO
+            FROM DUAL;
+            ROLLBACK;
+        END;
+    
+    END PU_ENVIAR_DEVOLUTIVA;
+    
+    PROCEDURE PX_LISTAR_FABRICA_GRUPO_MP(
+        P_RETORNO                  OUT t_cursor)
+    
+    IS
+    
+    BEGIN
+    OPEN P_RETORNO FOR 
+    SELECT NULL FROM DUAL;
+    
+    END PX_LISTAR_FABRICA_GRUPO_MP;
+
+    PROCEDURE PU_LIBERAR_LOGISTICA (
+        P_CD_POLO                   IN ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CD_CENTRO_EXPEDIDOR       IN ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_CD_MACHINE                IN ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_CD_WEEK                   IN ELO_AGENDAMENTO.CD_WEEK%TYPE,
+        P_RETORNO                   OUT T_CURSOR)
+        
+        IS
+       
+        vStatusCode             NUMBER;
+        vCodAgendamento         NUMBER;
+        vCodCarteira            NUMBER;
+        v_status                VARCHAR2(10);
+        vSG_TIPO_STATUS         VND.ELO_TIPO_STATUS.SG_TIPO_STATUS%TYPE;
+        vSG_STATUS              VND.ELO_STATUS.SG_STATUS%TYPE;
+        V_TRAVA                 VARCHAR2(1):='N';
+        
+        V_RET_CD_ELO_STATUS                 VND.ELO_STATUS.CD_ELO_STATUS%TYPE;
+        V_RET_SG_STATUS                      VND.ELO_STATUS.SG_STATUS%TYPE;
+        V_RET_ERRO                           VARCHAR2(1);
+        V_RET_RETORNO                        T_CURSOR;
+       
+        CURSOR C_CARTEIRA IS
+        SELECT DISTINCT
+             EC.NU_ORDEM_VENDA
+            ,CD_ITEM_PEDIDO
+            ,CD_ELO_CARTEIRA
+            ,IC_FA
+            ,IC_EXPORT
+            ,QT_SALDO_REFRESH
+            ,CD_MOTIVO_RECUSA
+            ,CD_BLOQUEIO_ENTREGA
+            ,DH_VENCIMENTO_PEDIDO 
+            ,DS_CREDIT_BLOCK_REASON 
+            ,CD_INCOTERMS 
+            ,IC_COOPERATIVE
+            ,DS_ROTEIRO_ENTREGA
+            ,NU_CONTRATO_SAP
+            ,QT_AGENDADA_CONFIRMADA
+            ,CD_BLOQUEIO_REMESSA
+            ,CD_BLOQUEIO_REMESSA_ITEM
+            ,CD_BLOQUEIO_FATURAMENTO
+            ,CD_BLOQUEIO_FATURAMENTO_ITEM
+            ,CD_BLOQUEIO_CREDITO
+            ,
+            NVL((SELECT SUM(NVL(POT.QT_AGENDADA_PROTOCOLO,0 )) QT 
+            FROM VND.ELO_VBAK_PROTOCOLO POT 
+            WHERE POT.CD_ELO_CARTEIRA = EC.CD_ELO_CARTEIRA 
+            AND POT.IC_ATIVO='S'), 0) QT_AGENDADA_PROTOCOLO
+            
+            
+        FROM VND.ELO_CARTEIRA EC
+        LEFT JOIN VND.ELO_AGENDAMENTO EA ON EC.CD_ELO_AGENDAMENTO = EA.CD_ELO_AGENDAMENTO
+        INNER JOIN VND.ELO_AGENDAMENTO_SUPERVISOR EAS ON EA.CD_ELO_AGENDAMENTO = EAS.CD_ELO_AGENDAMENTO
+        WHERE (EC.QT_AGENDADA_CONFIRMADA IS NOT NULL AND EC.QT_AGENDADA_CONFIRMADA > 0)
+        AND EC.CD_TIPO_AGENDAMENTO IS NOT NULL
+        AND EA.CD_ELO_STATUS >= (SELECT VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGFIN') FROM DUAL)
+        AND EA.CD_ELO_STATUS <= (SELECT VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGENC') FROM DUAL)
+        AND (P_CD_WEEK IS NULL OR EA.CD_WEEK = P_CD_WEEK)
+        AND (P_CD_POLO IS NULL OR EA.CD_POLO = P_CD_POLO)
+        AND (P_CD_CENTRO_EXPEDIDOR IS NULL OR EA.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+        AND (P_CD_MACHINE IS NULL OR EA.CD_MACHINE = P_CD_MACHINE);
+        -- LINHA DO CURSOR DA CARTEIRA
+        C_LINHA C_CARTEIRA%ROWTYPE;
+       
+        BEGIN
+            /*ATUALIZA O AGENDAMENTO*/
+            
+            BEGIN
+            SELECT  EA.CD_ELO_AGENDAMENTO INTO vCodAgendamento
+            FROM    VND.ELO_AGENDAMENTO EA 
+            WHERE   (EA.CD_WEEK = P_CD_WEEK)
+            AND     (P_CD_POLO IS NULL OR EA.CD_POLO = P_CD_POLO)
+            AND     (P_CD_CENTRO_EXPEDIDOR IS NULL OR EA.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+            AND     (P_CD_MACHINE IS NULL OR EA.CD_MACHINE = P_CD_MACHINE)
+            AND ROWNUM=1;
+
+            EXCEPTION 
+                WHEN NO_DATA_FOUND THEN
+                    BEGIN
+                        vCodAgendamento:= 0;
+                        V_TRAVA:='S';
+                    END;
+                WHEN OTHERS THEN 
+                    BEGIN
+                        vCodAgendamento:= 0;
+                        V_TRAVA:='S';
+                    END;
+            END;            
+        
+            -- GET STATUS ID BY CODE NAME
+            SELECT GX_ELO_COMMON.fx_elo_status('AGEND', 'AGLOG') INTO vStatusCode FROM DUAL;
+
+            -- ### UPDATE ELO_AGENDAMENTO BASED ON RULES ABOVE
+            BEGIN
+            UPDATE VND.ELO_AGENDAMENTO
+            SET CD_ELO_STATUS = vStatusCode
+            WHERE CD_ELO_AGENDAMENTO = vCodAgendamento
+            AND CD_ELO_STATUS < vStatusCode;  -- NOW ONLY STATUS ABOVE AGLOG ALLOW CHANGE TO AGLOG 2018-04-17 ADRIANO
+         
+            COMMIT;
+
+            EXCEPTION 
+                WHEN NO_DATA_FOUND THEN 
+                    BEGIN
+                    --vCodAgendamento:= 0;
+                    V_TRAVA:='N';
+                    END;
+                WHEN OTHERS THEN 
+                    BEGIN
+                    vCodAgendamento:= 0;
+                    V_TRAVA:='S';
+                    END;
+            END;             
+            
+
+            -- GET STATUS ID BY CODE NAME
+            SELECT GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW') 
+                INTO vStatusCode
+            FROM DUAL;
+
+            /*ATUALIZA A CARTEIRA*/
+
+            IF V_TRAVA ='N' THEN 
+                -- ### UPDATE ELO_CARTEIRA BASED ON RULES ABOVE
+                BEGIN
+                    UPDATE VND.ELO_CARTEIRA CT
+                    SET CT.CD_STATUS_LOGISTICA = vStatusCode,
+                        CT.CD_STATUS_CUSTOMER_SERVICE = vStatusCode
+                    WHERE  
+                    CT.CD_ELO_AGENDAMENTO = vCodAgendamento
+                    AND CT.QT_AGENDADA_CONFIRMADA > 0;
+                    
+                    /*
+                    WHERE CD_ELO_CARTEIRA IN (
+                                                SELECT  EC.CD_ELO_CARTEIRA
+                                                FROM    VND.ELO_CARTEIRA EC
+                                                INNER JOIN VND.ELO_AGENDAMENTO EA ON EA.CD_ELO_AGENDAMENTO = EC.CD_ELO_AGENDAMENTO
+                                                WHERE   (EC.QT_AGENDADA_CONFIRMADA > 0 )
+                                                AND     EC.CD_ELO_CARTEIRA = CT.CD_ELO_CARTEIRA
+                                                AND     EC.CD_ELO_AGENDAMENTO = vCodAgendamento
+                                                AND     (EA.CD_WEEK = P_CD_WEEK)
+                                                AND     (P_CD_POLO IS NULL OR EA.CD_POLO = P_CD_POLO)
+                                                AND     (P_CD_CENTRO_EXPEDIDOR IS NULL OR EA.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+                                                AND     (P_CD_MACHINE IS NULL OR EA.CD_MACHINE = P_CD_MACHINE));
+                 */
+                    COMMIT;
+                    
+                    EXCEPTION 
+                        WHEN NO_DATA_FOUND THEN 
+                            V_TRAVA:= 'S';
+                        
+                        WHEN OTHERS THEN 
+                            V_TRAVA:='S';
+                END;						            
+            END IF;
+                    
+        -- ALTERADO EM 27-12-17
+        -- SOLICITADO POR RONIE HAUERS
+        -- INCLUSAO DA MESMA REGRA DE TRATAMENTO DE STATUS DA CELULA DE ATENDIMENTO
+        IF C_CARTEIRA%ISOPEN THEN
+            CLOSE C_CARTEIRA;
+        END IF;
+
+        OPEN C_CARTEIRA;
+        LOOP
+        FETCH C_CARTEIRA into C_LINHA;
+            EXIT WHEN C_CARTEIRA%notfound;
+
+                --v_status := 'CLOOK';
+                -- ############# RULES FOR UPDATE STATUS ON ELO_CARTEIRA
+                BEGIN
+                V_TRAVA:='N';
+                
+            BEGIN
+            
+            VND.GX_CELL_ATTENDANCE.PU_CHECK_STATUS_CELL(
+                    C_LINHA.CD_ELO_CARTEIRA,
+                    V_RET_CD_ELO_STATUS,
+                    V_RET_SG_STATUS,
+                    V_RET_ERRO,
+                    V_RET_RETORNO);
+            COMMIT;
+            v_status:=V_RET_SG_STATUS;
+            
+            EXCEPTION 
+            
+            WHEN OTHERS THEN 
+                BEGIN
+                v_status:=NULL;
+                RAISE_APPLICATION_ERROR(-20001, 'ERRO ENCONTRADO CHECK STATUS - 028'
+                || SQLCODE || ' -ERROR- ' || SQLERRM );
+                V_TRAVA:='S';
+                END;
+            END;                
+
+            END;
+                
+        END LOOP;
+        
+        CLOSE C_CARTEIRA;                    
+
+        OPEN P_RETORNO FOR
+        SELECT '1' AS P_SUCESSO
+        FROM DUAL;
+
+    EXCEPTION
+        WHEN OTHERS THEN
+            BEGIN
+                OPEN P_RETORNO FOR
+                SELECT '0' AS P_SUCESSO
+                FROM DUAL;
+                ROLLBACK;
+            END;
+            
+    END PU_LIBERAR_LOGISTICA;
+    
+    PROCEDURE PX_GET_STATUS_AGENDAMENTO(
+        P_RETORNO                  OUT t_cursor
+    ) 
+    
+    IS
+    
+    BEGIN
+        OPEN P_RETORNO FOR 
+        SELECT  
+        elo_status.cd_elo_status, elo_status.ds_status
+        FROM elo_status 
+        INNER JOIN elo_agendamento  
+        ON elo_status.CD_ELO_STATUS = elo_agendamento.cd_elo_status ;
+        
+    END PX_GET_STATUS_AGENDAMENTO;
+    
+    PROCEDURE PX_GET_STATUS(
+        P_RETORNO                  OUT t_cursor
+    ) 
+    IS
+    BEGIN
+    
+    OPEN P_RETORNO FOR 
+    SELECT SG_STATUS
+    FROM ELO_STATUS ;
+       
+    END PX_GET_STATUS;
+    
+    PROCEDURE PX_GET_ATUALIZAR_SALDOS (
+        P_USUARIO_REFRESH   IN VND.ELO_CARTEIRA.CD_USUARIO_REFRESH%TYPE,
+        P_ORDEM_VENDA   IN VND.ELO_CARTEIRA.NU_ORDEM_VENDA%TYPE,
+        P_ITEM_PEDIDO   IN VND.ELO_CARTEIRA.CD_ITEM_PEDIDO%TYPE        
+    )        
+    
+    IS
+    BEGIN
+    BEGIN
+        UPDATE ELO_CARTEIRA EC SET
+        EC.CD_USUARIO_REFRESH = P_USUARIO_REFRESH,
+        EC.DH_REFRESH = CURRENT_DATE,
+        EC.QT_PROGRAMADA_REFRESH = EC.QT_PROGRAMADA,
+        EC.QT_ENTREGUE_REFRESH = EC.QT_ENTREGUE,
+        EC.QT_SALDO_REFRESH = EC.QT_SALDO,
+        EC.QT_AGENDADA_CONFIRMADA = EC.QT_AGENDADA_REFRESH,
+        EC.QT_AGENDADA_REFRESH = (case when (NVL(EC.QT_SALDO_REFRESH,0) <= NVL(EC.QT_AGENDADA_CONFIRMADA,0)) then EC.QT_SALDO_REFRESH else EC.QT_AGENDADA_CONFIRMADA end) 
+        , EC.NU_PROTOCOLO_ENTREGA = 
+        (CASE 
+            WHEN NVL(EC.QT_AGENDADA_REFRESH, 0) = 0 
+                THEN SUBSTR('GXFAB_PU_SALDO:' || NVL(TO_CHAR(EC.QT_AGENDADA_REFRESH), 'NUL') || NVL(EC.NU_PROTOCOLO_ENTREGA, '') , 1,30) 
+                ELSE SUBSTR(NVL(EC.NU_PROTOCOLO_ENTREGA, '.') || 'GXFAB_SL' , 1, 30) END)
+                                , EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0003, "APP": "GX_ELO_FACTORY.PX_GET_ATUALIZAR_SALDOS",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_PROGRAMADA_REFRESH", "VAL":' || TO_CHAR(EC.QT_PROGRAMADA) ||  '},' ||
+                                '{"NAME": "QT_ENTREGUE_REFRESH", "VAL":' || TO_CHAR(EC.QT_ENTREGUE) ||  '},' ||
+                                '{"NAME": "QT_SALDO_REFRESH", "VAL":' || TO_CHAR(EC.QT_AGENDADA_REFRESH) || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                
+                
+    WHERE NU_ORDEM_VENDA = P_ORDEM_VENDA AND CD_ITEM_PEDIDO  = P_ITEM_PEDIDO;
+    COMMIT;
+    
+    EXCEPTION 
+    WHEN NO_DATA_FOUND THEN 
+    NULL;
+    WHEN OTHERS THEN 
+    NULL;
+
+    
+    END;
+    
+    END PX_GET_ATUALIZAR_SALDOS;
+    
+    PROCEDURE PX_GET_VERIFICAR_LOGISTICA (
+           P_RETORNO                  OUT t_cursor
+    ) 
+    IS
+    
+    BEGIN
+    UPDATE elo_agendamento SET cd_elo_status = 4000   
+    WHERE cd_elo_status = 3000;
+    
+    END PX_GET_VERIFICAR_LOGISTICA;
+    
+    PROCEDURE PX_GET_ATUALIZAR_SALDOS (
+           P_RETORNO                  OUT t_cursor
+    )       
+    
+    IS
+    
+    BEGIN
+    OPEN P_RETORNO FOR 
+    SELECT cd_elo_status 
+    FROM elo_agendamento
+    WHERE cd_elo_status = 6; 
+    
+    END PX_GET_ATUALIZAR_SALDOS;
+    
+    PROCEDURE PX_GET_ENVIAR_DEVOLUTIVA ( 
+      P_RETORNO                  OUT t_cursor
+    ) 
+    IS
+    BEGIN
+      OPEN P_RETORNO FOR 
+      SELECT cd_elo_status 
+      FROM elo_agendamento
+      WHERE cd_elo_status = 6
+      AND dh_refresh is not null;
+    END PX_GET_ENVIAR_DEVOLUTIVA;
+    
+    PROCEDURE PX_GET_REENVIAR_DEVOLUTIVA ( 
+      P_RETORNO                  OUT t_cursor
+    ) 
+    IS
+    BEGIN
+        OPEN P_RETORNO FOR 
+        SELECT cd_elo_status 
+        FROM elo_agendamento
+        WHERE cd_elo_status = 7 
+        OR cd_elo_status = 8;
+    END PX_GET_REENVIAR_DEVOLUTIVA;
+    
+    PROCEDURE PX_GET_APROVADOS_TOTAL_REPLAN ( 
+      P_RETORNO                  OUT t_cursor
+    ) 
+    IS
+    BEGIN
+      OPEN P_RETORNO FOR 
+      SELECT cd_elo_status 
+      FROM elo_agendamento
+      WHERE cd_elo_status = 7 
+      OR cd_elo_status = 8;
+    END PX_GET_APROVADOS_TOTAL_REPLAN;
+    
+    PROCEDURE PU_CELL_FACTORY_UPDATE(
+        P_AJUSTE_VOLUME                 IN VND.ELO_CARTEIRA.QT_AGENDADA_FABRICA%TYPE,
+        P_CORTAR                        IN ELO_CARTEIRA.IC_CORTADO_FABRICA%TYPE DEFAULT NULL,
+        P_CENTRO_DESDOBRO               IN VND.ELO_CARTEIRA.CD_CENTRO_EXPEDIDOR_FABRICA%TYPE DEFAULT NULL,
+        P_CD_ELO_CARTEIRA               IN VND.ELO_CARTEIRA.CD_ELO_CARTEIRA%TYPE,
+        P_RETORNO                       OUT T_CURSOR) 
+        
+        IS    
+        
+        V_CD_ELO_CARTEIRA VND.ELO_CARTEIRA.CD_ELO_CARTEIRA%TYPE;
+        BEGIN
+         
+          SELECT CD_ELO_CARTEIRA INTO V_CD_ELO_CARTEIRA  -- ADD HERE MORE ROLES TO APPLY THE CHANGE ELO_CARTEIRA BEHAVIORS
+          FROM VND.ELO_CARTEIRA 
+          WHERE CD_ELO_CARTEIRA = P_CD_ELO_CARTEIRA;
+         
+          IF V_CD_ELO_CARTEIRA IS NOT NULL THEN
+            IF P_CORTAR = 1 THEN
+                  UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = P_CORTAR,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO,
+                    EC.QT_AGENDADA_CONFIRMADA = 0
+                                , EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO,' ') ||  '[{"ID": 0003, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(P_CORTAR), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                    
+                    
+                  WHERE 
+                    EC.CD_ELO_CARTEIRA = P_CD_ELO_CARTEIRA;
+            ELSE
+                  UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = P_CORTAR,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO,
+                    EC.QT_AGENDADA_CONFIRMADA = P_AJUSTE_VOLUME,
+                                 EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0004, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(P_CORTAR), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                    
+                    
+                  WHERE 
+                    EC.CD_ELO_CARTEIRA = P_CD_ELO_CARTEIRA;
+            END IF;
+              COMMIT;
+          END IF;
+          
+        OPEN P_RETORNO FOR
+        SELECT CASE WHEN V_CD_ELO_CARTEIRA IS NOT NULL THEN  1 ELSE 0 END  AS P_SUCESSO
+        FROM DUAL;
+    
+    END PU_CELL_FACTORY_UPDATE;
+
+    PROCEDURE PU_CELL_FACTORY_UPDATE_TESTE(
+        P_AJUSTE_VOLUME                 IN VND.ELO_CARTEIRA.QT_AGENDADA_FABRICA%TYPE,
+        P_CORTAR                        IN ELO_CARTEIRA.IC_CORTADO_FABRICA%TYPE DEFAULT NULL,
+        P_CENTRO_DESDOBRO               IN VND.ELO_CARTEIRA.CD_CENTRO_EXPEDIDOR_FABRICA%TYPE DEFAULT NULL,
+        P_CD_ELO_CARTEIRA               IN VND.ELO_CARTEIRA.CD_ELO_CARTEIRA%TYPE,
+        P_CD_TIPO_AGENDAMENTO           IN VND.ELO_CARTEIRA.CD_TIPO_AGENDAMENTO%TYPE,
+        P_CD_ELO_STATUS                 IN VND.ELO_AGENDAMENTO.CD_ELO_STATUS%TYPE,
+        P_CD_ELO_AGENDAMENTO            IN VND.ELO_AGENDAMENTO.CD_ELO_AGENDAMENTO%TYPE,
+        P_RETORNO                       OUT T_CURSOR) 
+
+        IS    
+        
+        V_CD_ELO_CARTEIRA VND.ELO_CARTEIRA.CD_ELO_CARTEIRA%TYPE;
+        V_QT_AGENDADA_CONFIRMADA VND.ELO_CARTEIRA.QT_AGENDADA_CONFIRMADA%TYPE;
+        V_CD_ELO_STATUS VND.ELO_STATUS.CD_ELO_STATUS%TYPE;
+        V_CD_TIPO_AGENDAMENTO VND.ELO_CARTEIRA.CD_TIPO_AGENDAMENTO%TYPE;
+        V_CD_ELO_AGENDAMENTO VND.ELO_CARTEIRA.CD_TIPO_AGENDAMENTO%TYPE;
+        V_EH_POLO VARCHAR2(1);
+        V_SG_STATUS VND.ELO_STATUS.SG_STATUS%TYPE;
+        V_IC_CORTADO_FABRICA  VND.ELO_CARTEIRA.IC_CORTADO_FABRICA%TYPE;
+        
+        BEGIN
+         
+         BEGIN 
+        SELECT 
+        CT.CD_ELO_CARTEIRA , CT.QT_AGENDADA_CONFIRMADA, 
+        CT.CD_TIPO_AGENDAMENTO, CT.CD_ELO_AGENDAMENTO, AGE.CD_ELO_STATUS, ST.SG_STATUS,
+        CASE WHEN AGE.CD_POLO IS NOT NULL  THEN 'S' ELSE 'N' END EH_POLO
+        INTO V_CD_ELO_CARTEIRA  , V_QT_AGENDADA_CONFIRMADA, 
+        V_CD_TIPO_AGENDAMENTO, V_CD_ELO_AGENDAMENTO, V_CD_ELO_STATUS, V_SG_STATUS,  V_EH_POLO
+        -- ADD HERE MORE ROLES TO APPLY THE CHANGE ELO_CARTEIRA BEHAVIORS
+        FROM VND.ELO_CARTEIRA CT
+        INNER JOIN VND.ELO_AGENDAMENTO AGE
+        ON CT.CD_ELO_AGENDAMENTO = AGE.CD_ELO_AGENDAMENTO
+        INNER JOIN VND.ELO_STATUS ST
+        ON ST.CD_ELO_STATUS = AGE.CD_ELO_STATUS
+        WHERE CT.CD_ELO_CARTEIRA = P_CD_ELO_CARTEIRA
+        AND CT.IC_ATIVO = 'S' AND AGE.IC_ATIVO = 'S';
+        EXCEPTION 
+        WHEN NO_DATA_FOUND THEN 
+        BEGIN
+            V_CD_ELO_CARTEIRA:=NULL;
+            V_QT_AGENDADA_CONFIRMADA:=NULL;
+            V_CD_ELO_STATUS:=NULL;
+            V_CD_TIPO_AGENDAMENTO:=NULL;
+            V_CD_ELO_AGENDAMENTO:=NULL;
+            V_EH_POLO:=NULL;
+            V_SG_STATUS:=NULL;
+        END;
+        WHEN OTHERS THEN 
+        BEGIN
+            V_CD_ELO_CARTEIRA:=NULL;
+            V_QT_AGENDADA_CONFIRMADA:=NULL;
+            V_CD_ELO_STATUS:=NULL;
+            V_CD_TIPO_AGENDAMENTO:=NULL;
+            V_CD_ELO_AGENDAMENTO:=NULL;
+            V_EH_POLO:=NULL;
+            V_SG_STATUS:=NULL;
+            
+        END;        
+        
+        
+        END;
+        
+        V_EH_POLO:=
+        CASE 
+        WHEN V_EH_POLO = 'S' AND V_SG_STATUS NOT IN ('PLAN', 'AGCTR', 'AGENC' ) THEN 'N'  -- CONTINUAR COM S POIS NÃOESTA NO STATUS BLOQUEADO
+        ELSE 'N' END;
+        
+        
+        V_IC_CORTADO_FABRICA:=
+        CASE
+        WHEN P_CORTAR = '1' THEN '1'
+        WHEN P_CORTAR = 'S' THEN '1'
+        WHEN P_CORTAR = '0' THEN '0'
+        WHEN P_CORTAR = 'NULL' THEN '0'
+        WHEN P_CORTAR = 'N' THEN '0'
+        WHEN P_CORTAR IS NULL THEN '0'
+        ELSE 
+        P_CORTAR END;
+        
+        
+       -- IF (P_CD_TIPO_AGENDAMENTO IS NOT NULL AND P_CD_ELO_STATUS = VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGFIN')) THEN  --change paulo 2018.02.28
+          IF (NVL(V_QT_AGENDADA_CONFIRMADA,0) = 0 AND  V_CD_TIPO_AGENDAMENTO IS NOT NULL ) THEN
+            IF P_CORTAR = '1' THEN
+                UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = V_IC_CORTADO_FABRICA,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO  ,
+                    EC.QT_AGENDADA_CONFIRMADA = 0,
+                    EC.DH_FABRICA = CURRENT_DATE,
+                    EC.CD_CENTRO_EXPEDIDOR = CASE WHEN V_EH_POLO = 'S' THEN P_CENTRO_DESDOBRO ELSE EC.CD_CENTRO_EXPEDIDOR END,
+                    EC.DH_CORTADO_FABRICA = CURRENT_DATE, 
+                                 EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0005, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE_TESTE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(V_IC_CORTADO_FABRICA), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                     
+                    
+                WHERE EC.CD_ELO_CARTEIRA = V_CD_ELO_CARTEIRA;
+            ELSE
+                UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.QT_AGENDADA_CONFIRMADA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = V_IC_CORTADO_FABRICA,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO,
+                    EC.CD_CENTRO_EXPEDIDOR = CASE WHEN V_EH_POLO = 'S' THEN P_CENTRO_DESDOBRO ELSE EC.CD_CENTRO_EXPEDIDOR END,
+                    EC.DH_FABRICA = CURRENT_DATE, 
+                                 EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0006, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE_TESTE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(V_IC_CORTADO_FABRICA), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                        
+                    
+                    
+                WHERE EC.CD_ELO_CARTEIRA = V_CD_ELO_CARTEIRA;
+            END IF;
+            COMMIT;
+        --ELSIF (V_CD_TIPO_AGENDAMENTO IS NULL AND V_CD_ELO_STATUS = VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGFIN')) THEN
+        ELSIF (NVL(V_QT_AGENDADA_CONFIRMADA,0) = 0 AND V_CD_TIPO_AGENDAMENTO IS NULL ) THEN
+
+            IF P_CORTAR = '1' THEN
+                UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = V_IC_CORTADO_FABRICA,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO,
+                    EC.CD_CENTRO_EXPEDIDOR = CASE WHEN V_EH_POLO = 'S' THEN P_CENTRO_DESDOBRO ELSE EC.CD_CENTRO_EXPEDIDOR END,
+                    EC.QT_AGENDADA_CONFIRMADA = 0,
+                    EC.CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'ORIGINAL'),
+                    EC.DH_FABRICA = CURRENT_DATE,
+                    EC.DH_CORTADO_FABRICA = CURRENT_DATE, 
+                                 EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0007, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE_TESTE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(V_IC_CORTADO_FABRICA), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                      
+                    
+                WHERE EC.CD_ELO_CARTEIRA = V_CD_ELO_CARTEIRA;
+            ELSE
+                  UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = V_IC_CORTADO_FABRICA,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO,
+                    EC.CD_CENTRO_EXPEDIDOR = CASE WHEN V_EH_POLO = 'S' THEN P_CENTRO_DESDOBRO ELSE EC.CD_CENTRO_EXPEDIDOR END,
+                    EC.QT_AGENDADA_CONFIRMADA = P_AJUSTE_VOLUME,
+                    EC.CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'ORIGINAL'),
+                    EC.DH_FABRICA = CURRENT_DATE, 
+                                                     EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0008, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE_TESTE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(V_IC_CORTADO_FABRICA), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000) 
+                  WHERE EC.CD_ELO_CARTEIRA = V_CD_ELO_CARTEIRA;
+            END IF;
+            COMMIT;
+          
+         -- ELSIF (V_CD_ELO_STATUS = VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGLOG') OR V_CD_ELO_STATUS = VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGPRE')) THEN
+         ELSIF (V_QT_AGENDADA_CONFIRMADA > 0 AND V_CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'ORIGINAL')) THEN  -- ORIGINAL
+            IF P_CORTAR = '1' THEN
+                UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = V_IC_CORTADO_FABRICA,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO,
+                    EC.CD_CENTRO_EXPEDIDOR = CASE WHEN V_EH_POLO = 'S' THEN P_CENTRO_DESDOBRO ELSE EC.CD_CENTRO_EXPEDIDOR END,
+                    EC.QT_AGENDADA_CONFIRMADA = 0,
+                    EC.CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'INCLUSAO'),
+                    EC.CD_STATUS_LOGISTICA = VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW'),
+                    --CD_STATUS_CUSTOMER_SERVICE = VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW')
+                    EC.DH_FABRICA = CURRENT_DATE,
+                    EC.DH_CORTADO_FABRICA = CURRENT_DATE,
+                    EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0009, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE_TESTE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(V_IC_CORTADO_FABRICA), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                     
+                    
+                WHERE EC.CD_ELO_CARTEIRA = V_CD_ELO_CARTEIRA;
+            ELSE
+                UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = V_IC_CORTADO_FABRICA,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO,
+                    EC.CD_CENTRO_EXPEDIDOR = CASE WHEN V_EH_POLO = 'S' THEN P_CENTRO_DESDOBRO ELSE EC.CD_CENTRO_EXPEDIDOR END,
+                    EC.QT_AGENDADA_CONFIRMADA = P_AJUSTE_VOLUME,
+                    EC.CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'INCLUSAO'),
+                    EC.CD_STATUS_LOGISTICA = VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW'),
+                    --CD_STATUS_CUSTOMER_SERVICE = VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW')
+                    EC.DH_FABRICA = CURRENT_DATE, 
+                    EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0010, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE_TESTE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(V_IC_CORTADO_FABRICA), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                       
+                WHERE EC.CD_ELO_CARTEIRA = V_CD_ELO_CARTEIRA;
+            END IF;
+              COMMIT;
+              
+          ELSIF (V_QT_AGENDADA_CONFIRMADA > 0 AND V_CD_TIPO_AGENDAMENTO <> VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'ORIGINAL')) THEN  -- ORIGINAL 22
+            IF P_CORTAR = '1' THEN
+                UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = V_IC_CORTADO_FABRICA,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO,
+                    EC.CD_CENTRO_EXPEDIDOR = CASE WHEN V_EH_POLO = 'S' THEN P_CENTRO_DESDOBRO ELSE EC.CD_CENTRO_EXPEDIDOR END,
+                    EC.QT_AGENDADA_CONFIRMADA = 0,
+                    --ELO_CARTEIRA.CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'INCLUSAO'),
+                    EC.CD_STATUS_LOGISTICA = VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW'),
+                    EC.DH_FABRICA = CURRENT_DATE,
+                    EC.DH_CORTADO_FABRICA = CURRENT_DATE, 
+                    EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0011, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE_TESTE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(V_IC_CORTADO_FABRICA), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                     
+                    --CD_STATUS_CUSTOMER_SERVICE = VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW')
+                WHERE EC.CD_ELO_CARTEIRA = V_CD_ELO_CARTEIRA;
+            ELSE
+                UPDATE ELO_CARTEIRA EC SET
+                    EC.QT_AGENDADA_FABRICA = P_AJUSTE_VOLUME,
+                    EC.IC_CORTADO_FABRICA = V_IC_CORTADO_FABRICA,
+                    EC.CD_CENTRO_EXPEDIDOR_FABRICA = P_CENTRO_DESDOBRO,
+                    EC.CD_CENTRO_EXPEDIDOR = CASE WHEN V_EH_POLO = 'S' THEN P_CENTRO_DESDOBRO ELSE EC.CD_CENTRO_EXPEDIDOR END,
+                    EC.QT_AGENDADA_CONFIRMADA = P_AJUSTE_VOLUME,
+                    --ELO_CARTEIRA.CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'INCLUSAO'),
+                    EC.CD_STATUS_LOGISTICA = VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW'),
+                    --CD_STATUS_CUSTOMER_SERVICE = VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW')
+                    EC.DH_FABRICA = CURRENT_DATE,
+                    EC.DS_VERSAO = SUBSTR(NVL(EC.DS_VERSAO, ' ') ||  '[{"ID": 0012, "APP": "GX_ELO_FACTORY.PU_CELL_FACTORY_UPDATE_TESTE",' || 
+                                '"PROPERTIE": [{"NAME": "QT_AGENDADA_CONFIRMADA", "VAL":' || NVL(TO_CHAR(EC.QT_AGENDADA_CONFIRMADA), 'NULL') || '},' ||
+                                '{"NAME": "QT_AGENDADA_FABRICA", "VAL":' || NVL(TO_CHAR(P_AJUSTE_VOLUME), 'NULL') ||  '},' ||
+                                '{"NAME": "IC_CORTADO_FABRICA", "VAL":' || NVL(TO_CHAR(V_IC_CORTADO_FABRICA), 'NULL') ||  '},' ||
+                                '{"NAME": "CD_CENTRO_EXPEDIDOR_FABRICA", "VAL":' || NVL(TO_CHAR(P_CENTRO_DESDOBRO), 'NULL') || '},' ||
+                                
+                                        '], "DH_ULT_MOD": ' || TO_CHAR(CURRENT_DATE) || ' }],' ,1, 4000)                     
+                    
+                WHERE EC.CD_ELO_CARTEIRA = V_CD_ELO_CARTEIRA;
+            END IF;
+              COMMIT;             
+              
+          END IF;
+          
+        OPEN P_RETORNO FOR
+        SELECT CASE WHEN V_CD_ELO_CARTEIRA IS NOT NULL THEN  1 ELSE 0 END  AS P_SUCESSO
+        FROM DUAL;
+
+    END PU_CELL_FACTORY_UPDATE_TESTE;
+
+    PROCEDURE PX_GET_NU_CARTEIRA_FACTORY ( 
+      P_RETORNO                  OUT t_cursor
+    ) 
+    IS
+    BEGIN
+        OPEN P_RETORNO FOR
+        Select dt_week_start, cd_week from  ELO_AGENDAMENTO
+        order by dt_week_start DESC ;
+        
+    END PX_GET_NU_CARTEIRA_FACTORY;
+    
+    PROCEDURE PX_GET_CENTROS_FACTORY ( 
+      P_RETORNO                  OUT t_cursor
+    ) 
+    IS
+    BEGIN
+        OPEN P_RETORNO FOR
+            SELECT
+                CD_CENTRO_EXPEDIDOR,
+                DS_CENTRO_EXPEDIDOR
+            FROM
+                CTF.CENTRO_EXPEDIDOR
+            ORDER BY DS_CENTRO_EXPEDIDOR;
+    END PX_GET_CENTROS_FACTORY;
+    
+    FUNCTION FX_BLOCK_TORRE_FRETES(
+        P_CD_ELO_CARTEIRA       IN CHAR)
+    
+        RETURN VARCHAR2 IS
+        
+        P_RETORNO       VARCHAR2(1);
+        iCOUNT          INTEGER:=1;
+        
+        BEGIN
+    
+        P_RETORNO := 'N';
+ 
+            BEGIN
+            SELECT 
+                CASE 
+                WHEN EC.IC_PERMITIR_CS = 'S' THEN 'S'
+                WHEN EC.DH_LIBERACAO_TORRE_FRETES IS NULL THEN 'S'  
+                ELSE 'N' END IC_PERMITIR_ALTERAR
+            INTO  P_RETORNO
+            FROM VND.ELO_CARTEIRA EC
+            WHERE EC.CD_ELO_CARTEIRA = P_CD_ELO_CARTEIRA;
+            EXCEPTION 
+            WHEN NO_DATA_FOUND THEN 
+                P_RETORNO := '-';
+            WHEN OTHERS THEN 
+                P_RETORNO := '-';
+            END;
+    
+        RETURN P_RETORNO;
+    
+    END FX_BLOCK_TORRE_FRETES;
+    
+    PROCEDURE PX_GET_TOT_CAPACIDADE(
+            P_CD_CENTRO_EXPEDIDOR           IN VND.ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE DEFAULT NULL,
+            P_NU_WEEK                       IN CHAR,
+            P_RETORNO                       OUT T_CURSOR)
+            
+    AS
+    
+    BEGIN
+        OPEN P_RETORNO FOR
+        SELECT SUM(CI.NU_CAPACIDADE) "NU_CAPACIDADE"
+        FROM VND.ELO_AGENDAMENTO_CENTRO_ITEM CI
+        INNER JOIN VND.ELO_AGENDAMENTO_CENTRO C ON C.CD_AGENDAMENTO_CENTRO = CI.CD_AGENDAMENTO_CENTRO
+        WHERE(C.IC_ATIVO = 'S')
+        AND (CI.IC_ATIVO = 'S')
+        AND (C.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+        AND to_number(to_char(to_date(C.DT_WEEK_START,'DD/MM/YYYY'),'WW')) = P_NU_WEEK;
+    
+    END PX_GET_TOT_CAPACIDADE;
+    
+    PROCEDURE PX_GET_TOT_CAPACIDADE(
+            P_CD_CENTRO_EXPEDIDOR           IN VND.ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE DEFAULT NULL,
+            P_CD_WEEK                       IN VND.ELO_AGENDAMENTO.CD_WEEK%TYPE,
+            P_RETORNO                       OUT T_CURSOR)
+            
+    AS
+    
+    BEGIN
+        OPEN P_RETORNO FOR
+        SELECT SUM(CI.NU_CAPACIDADE) "NU_CAPACIDADE"
+        FROM VND.ELO_AGENDAMENTO_CENTRO_ITEM CI
+        INNER JOIN VND.ELO_AGENDAMENTO_CENTRO C ON C.CD_AGENDAMENTO_CENTRO = CI.CD_AGENDAMENTO_CENTRO
+        WHERE(C.IC_ATIVO = 'S')
+        AND (CI.IC_ATIVO = 'S')
+        AND (C.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+        AND ('W' || TO_CHAR(C.DT_WEEK_START,'WWYYYY')) = P_CD_WEEK;
+    
+    END PX_GET_TOT_CAPACIDADE;    
+    
+    
+    
+    PROCEDURE PX_GET_TOT_CAPACIDADE(
+            P_CD_POLO           IN VND.ELO_AGENDAMENTO.CD_POLO%TYPE DEFAULT NULL,
+            P_CD_WEEK                       IN VND.ELO_AGENDAMENTO.CD_WEEK%TYPE,
+            P_RETORNO                       OUT T_CURSOR)
+            
+    AS
+    
+    BEGIN
+        OPEN P_RETORNO FOR
+        SELECT SUM(CITEM.NU_CAPACIDADE) NU_CAPACIDADE
+        FROM VND.ELO_AGENDAMENTO_POLO_CENTRO PC
+        INNER JOIN VND.ELO_AGENDAMENTO AGE
+        ON PC.CD_ELO_AGENDAMENTO = AGE.CD_ELO_AGENDAMENTO 
+        INNER JOIN VND.ELO_AGENDAMENTO_CENTRO AGCC
+        ON PC.CD_CENTRO_EXPEDIDOR = AGCC.CD_CENTRO_EXPEDIDOR
+        INNER JOIN VND.ELO_AGENDAMENTO_CENTRO_ITEM CITEM
+        ON CITEM.CD_AGENDAMENTO_CENTRO = AGCC.CD_AGENDAMENTO_CENTRO
+        WHERE 
+        AGE.CD_POLO = P_CD_POLO AND AGE.CD_WEEK = P_CD_WEEK
+        AND TO_CHAR(AGE.DT_WEEK_START,'YYYYWW') = TO_CHAR(AGCC.DT_WEEK_START,'YYYYWW')
+        and pc.cd_polo = P_CD_POLO
+        AND AGE.IC_ATIVO = 'S'
+        AND AGCC.IC_ATIVO = 'S'
+        AND CITEM.IC_ATIVO = 'S';
+    
+    END PX_GET_TOT_CAPACIDADE;    
+    
+
+    FUNCTION FX_GET_BIGBAG(
+        P_CD_ELO_CARTEIRA       IN VND.ELO_CARTEIRA.CD_ELO_CARTEIRA%TYPE)
+    
+        RETURN VARCHAR2 IS
+        
+        P_RETORNO       VARCHAR2(1);
+        iCOUNT          INTEGER;
+        
+        BEGIN
+    
+        P_RETORNO := '-';
+    
+        SELECT COUNT(CD_ELO_CARTEIRA) INTO iCOUNT
+        FROM VND.ELO_CARTEIRA_DAY ECD
+        WHERE ECD.CD_ELO_CARTEIRA = P_CD_ELO_CARTEIRA AND ECD.CD_GRUPO_EMBALAGEM = 'B';
+            
+        IF(iCOUNT > 0) THEN
+            P_RETORNO := 'X';
+        ELSE
+            P_RETORNO := '-';
+        END IF;
+    
+        RETURN P_RETORNO;
+    
+    END FX_GET_BIGBAG;
+    
+    FUNCTION FX_GET_ENSACADO(
+        P_CD_ELO_CARTEIRA       IN CHAR)
+    
+        RETURN VARCHAR2 IS
+        
+        P_RETORNO       VARCHAR2(1);
+        iCOUNT          INTEGER;
+        
+        BEGIN
+    
+        P_RETORNO := '-';
+    
+        SELECT COUNT(CD_ELO_CARTEIRA) INTO iCOUNT
+        FROM VND.ELO_CARTEIRA_DAY ECD
+        WHERE ECD.CD_ELO_CARTEIRA = P_CD_ELO_CARTEIRA AND ECD.CD_GRUPO_EMBALAGEM = 'S';
+            
+        IF(iCOUNT > 0) THEN
+            P_RETORNO := 'X';
+        ELSE
+            P_RETORNO := '-';
+        END IF;
+            
+        RETURN P_RETORNO;
+    
+    END FX_GET_ENSACADO;
+
+    FUNCTION FX_GET_GRANEL(
+        P_CD_ELO_CARTEIRA       IN CHAR)
+    
+        RETURN VARCHAR2 IS
+        
+        P_RETORNO       VARCHAR2(1);
+        iCOUNT          INTEGER;
+        
+        BEGIN
+    
+        P_RETORNO := '-';
+    
+        SELECT COUNT(CD_ELO_CARTEIRA) INTO iCOUNT
+        FROM VND.ELO_CARTEIRA_DAY ECD
+        WHERE ECD.CD_ELO_CARTEIRA = P_CD_ELO_CARTEIRA AND ECD.CD_GRUPO_EMBALAGEM = 'G';
+
+        IF(iCOUNT > 0) THEN
+            P_RETORNO := 'X';
+        ELSE
+            P_RETORNO := '-';
+        END IF;
+
+        RETURN P_RETORNO;
+    
+    END FX_GET_GRANEL;
+    
+    
+  
+    PROCEDURE PU_ATUALIZA_CAPACIDADE(
+        P_CD_POLO               IN VND.ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CD_CENTRO_EXPEDIDOR   IN VND.ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_CD_MACHINE            IN VND.ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_CD_WEEK               IN VND.ELO_AGENDAMENTO.CD_WEEK%TYPE
+    )
+    
+    IS
+    
+    V_CD_ELO_CARTEIRA  VND.ELO_CARTEIRA.CD_ELO_CARTEIRA%TYPE;
+ 
+    CURSOR C_PROTOCOLO IS
+    WITH CTE_ACUMULADO AS (
+
+    SELECT 
+    SUM(APPL_CAPACIDADE.QT_TOTAL_CONFIRMADA) QT_TOTAL_CONFIRMADA ,
+    SUM(NVL(APPL_CAPACIDADE.QT_CAPACIDADE_POLO_WTH_OVB_SUP,0)) QT_CAPACIDADE_POLO_WTH_OVB_SUP,
+    SUM(NVL(APPL_CAPACIDADE.QT_CAPACIDADE_CC_WTH_OVB_SUP,0)) QT_CAPACIDADE_CC_WTH_OVB_SUP,
+    SUM(NVL(APPL_CAPACIDADE.QT_CAPACIDADE_MAQ_WTH_OVB_SUP,0)) QT_CAPACIDADE_MAQ_WTH_OVB_SUP,
+    SUM(APPL_CAPACIDADE.QT_TOTAL_CONFIRMADA - (NVL(APPL_CAPACIDADE.QT_CAPACIDADE_POLO_WTH_OVB_SUP,0)
+    +NVL(APPL_CAPACIDADE.QT_CAPACIDADE_CC_WTH_OVB_SUP,0) + NVL(APPL_CAPACIDADE.QT_CAPACIDADE_MAQ_WTH_OVB_SUP,0))) QT_ACIMA_CAPACIDADE,
+    APPL_CAPACIDADE.QT_AGENDADA_CONFIRMADA,
+    SUM(SUM(APPL_CAPACIDADE.QT_AGENDADA_CONFIRMADA)) OVER
+    (
+    PARTITION BY APPL_CAPACIDADE.CD_ELO_AGENDAMENTO
+    ORDER BY  APPL_CAPACIDADE.NU_ORDEM  DESC
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    )
+    AS QT_AGENDADA_ACUMULADA,
+    
+    SUM(APPL_CAPACIDADE.QT_TOTAL_CONFIRMADA - (NVL(APPL_CAPACIDADE.QT_CAPACIDADE_POLO_WTH_OVB_SUP,0)
+    +NVL(APPL_CAPACIDADE.QT_CAPACIDADE_CC_WTH_OVB_SUP,0) + NVL(APPL_CAPACIDADE.QT_CAPACIDADE_MAQ_WTH_OVB_SUP,0)))
+    -
+    SUM(SUM(APPL_CAPACIDADE.QT_AGENDADA_CONFIRMADA)) OVER
+    (
+    PARTITION BY APPL_CAPACIDADE.CD_ELO_AGENDAMENTO
+    ORDER BY  APPL_CAPACIDADE.NU_ORDEM  DESC
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) QT_ACIMA_CAPAC_AGEND_ACUMUL,
+    
+    APPL_CAPACIDADE.QT_OVERBOOKING_SUPERVISORES, 
+    APPL_CAPACIDADE.CD_ELO_STATUS,APPL_CAPACIDADE.CD_WEEK,APPL_CAPACIDADE.CD_POLO,
+    APPL_CAPACIDADE.CD_CENTRO_EXPEDIDOR,APPL_CAPACIDADE.CD_MACHINE,
+    APPL_CAPACIDADE.CD_ELO_CARTEIRA, APPL_CAPACIDADE.CD_ELO_AGENDAMENTO,APPL_CAPACIDADE.CD_ELO_AGENDAMENTO_ITEM,
+    APPL_CAPACIDADE.NU_CONTRATO_SAP,APPL_CAPACIDADE.CD_ITEM_CONTRATO,
+    APPL_CAPACIDADE.NU_ORDEM_VENDA,APPL_CAPACIDADE.CD_ITEM_PEDIDO,
+    APPL_CAPACIDADE.CD_INCOTERMS,APPL_CAPACIDADE.NU_ORDEM
+    
+    FROM 
+    (
+    SELECT 
+    (SELECT SUM(NVL(IECT.QT_AGENDADA_CONFIRMADA,0)) QT_AGE 
+    FROM VND.ELO_CARTEIRA IECT
+    WHERE IECT.CD_ELO_AGENDAMENTO = C.CD_ELO_AGENDAMENTO) QT_TOTAL_CONFIRMADA,
+    
+    (SELECT SUM(NVL(ICCITEM.NU_CAPACIDADE,0))  * (1 + (MAX(IEAGE.QT_OVERBOOKING_SUPERVISORES)/100.00)) NU_CAPACIDADE
+    FROM VND.ELO_AGENDAMENTO IEAGE 
+    INNER JOIN VND.ELO_AGENDAMENTO_CENTRO IEAGECC
+    ON IEAGE.CD_POLO = IEAGECC.CD_POLO
+    AND TO_CHAR(IEAGE.DT_WEEK_START,'YYYYWW') = TO_CHAR(IEAGECC.DT_WEEK_START,'YYYYWW')
+    INNER JOIN VND.ELO_AGENDAMENTO_CENTRO_ITEM ICCITEM 
+    ON IEAGECC.CD_AGENDAMENTO_CENTRO = ICCITEM.CD_AGENDAMENTO_CENTRO
+    WHERE 
+    ICCITEM.IC_ATIVO = 'S' 
+    AND IEAGE.IC_ATIVO = 'S' 
+    AND IEAGECC.IC_ATIVO = 'S'
+    AND IEAGE.CD_ELO_AGENDAMENTO = A.CD_ELO_AGENDAMENTO
+    GROUP BY IEAGE.CD_ELO_AGENDAMENTO
+    ) QT_CAPACIDADE_POLO_WTH_OVB_SUP,
+    
+    (SELECT SUM(NVL(ICCITEM.NU_CAPACIDADE,0))  * (1 + (MAX(IEAGE.QT_OVERBOOKING_SUPERVISORES)/100.00)) NU_CAPACIDADE
+    FROM VND.ELO_AGENDAMENTO IEAGE 
+    INNER JOIN VND.ELO_AGENDAMENTO_CENTRO IEAGECC
+    ON IEAGE.CD_CENTRO_EXPEDIDOR = IEAGECC.CD_CENTRO_EXPEDIDOR
+    AND TO_CHAR(IEAGE.DT_WEEK_START,'YYYYWW') = TO_CHAR(IEAGECC.DT_WEEK_START,'YYYYWW')
+    INNER JOIN VND.ELO_AGENDAMENTO_CENTRO_ITEM ICCITEM 
+    ON IEAGECC.CD_AGENDAMENTO_CENTRO = ICCITEM.CD_AGENDAMENTO_CENTRO
+    WHERE 
+    ICCITEM.IC_ATIVO = 'S' 
+    AND IEAGE.IC_ATIVO = 'S' 
+    AND IEAGECC.IC_ATIVO = 'S'
+    AND IEAGE.CD_ELO_AGENDAMENTO = A.CD_ELO_AGENDAMENTO
+    GROUP BY IEAGE.CD_ELO_AGENDAMENTO
+    ) QT_CAPACIDADE_CC_WTH_OVB_SUP,
+    
+    (SELECT SUM(NVL(ICCITEM.NU_CAPACIDADE,0))  * (1 + (MAX(IEAGE.QT_OVERBOOKING_SUPERVISORES)/100.00)) NU_CAPACIDADE
+    FROM VND.ELO_AGENDAMENTO IEAGE 
+    INNER JOIN VND.ELO_AGENDAMENTO_CENTRO IEAGECC
+    ON IEAGE.CD_MACHINE = IEAGECC.CD_MACHINE
+    AND TO_CHAR(IEAGE.DT_WEEK_START,'YYYYWW') = TO_CHAR(IEAGECC.DT_WEEK_START,'YYYYWW')
+    INNER JOIN VND.ELO_AGENDAMENTO_CENTRO_ITEM ICCITEM 
+    ON IEAGECC.CD_AGENDAMENTO_CENTRO = ICCITEM.CD_AGENDAMENTO_CENTRO
+    WHERE 
+    ICCITEM.IC_ATIVO = 'S' 
+    AND IEAGE.IC_ATIVO = 'S' 
+    AND IEAGECC.IC_ATIVO = 'S'
+    AND IEAGE.CD_ELO_AGENDAMENTO = A.CD_ELO_AGENDAMENTO
+    GROUP BY IEAGE.CD_ELO_AGENDAMENTO
+    ) QT_CAPACIDADE_MAQ_WTH_OVB_SUP,
+    A.QT_OVERBOOKING_SUPERVISORES, 
+    A.CD_ELO_STATUS,A.CD_WEEK,A.CD_POLO,A.CD_CENTRO_EXPEDIDOR,A.CD_MACHINE,
+    C.CD_ELO_CARTEIRA,C.CD_ELO_AGENDAMENTO,C.CD_ELO_AGENDAMENTO_ITEM,
+    C.NU_CONTRATO_SAP,C.CD_ITEM_CONTRATO,C.NU_ORDEM_VENDA,C.CD_ITEM_PEDIDO,
+    C.CD_INCOTERMS,C.QT_AGENDADA_CONFIRMADA,C.NU_ORDEM
+    FROM VND.ELO_CARTEIRA C
+    INNER JOIN ELO_AGENDAMENTO A 
+    ON C.CD_ELO_AGENDAMENTO = A.CD_ELO_AGENDAMENTO 
+    WHERE 
+    A.CD_WEEK = P_CD_WEEK --'W092017'
+    AND (P_CD_POLO IS NULL OR A.CD_POLO = P_CD_POLO)
+    AND (P_CD_CENTRO_EXPEDIDOR IS NULL OR A.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+    AND (P_CD_MACHINE IS NULL OR A.CD_MACHINE = P_CD_MACHINE)    
+    
+    AND A.IC_ATIVO = 'S'
+    AND C.IC_ATIVO = 'S'
+    --AND A.CD_POLO = 'P002'
+    AND C.QT_AGENDADA_CONFIRMADA > 0
+    --AND CD_ELO_CARTEIRA_GROUPING IS NOT NULL
+    
+    ) APPL_CAPACIDADE
+    WHERE
+    APPL_CAPACIDADE.QT_TOTAL_CONFIRMADA > NVL(QT_CAPACIDADE_POLO_WTH_OVB_SUP,0) + NVL(QT_CAPACIDADE_CC_WTH_OVB_SUP,0)+ NVL(QT_CAPACIDADE_MAQ_WTH_OVB_SUP,0)
+    AND NU_ORDEM_VENDA > '0' AND CD_ITEM_PEDIDO > 0 AND CD_ITEM_CONTRATO > 0
+    GROUP BY 
+    APPL_CAPACIDADE.QT_OVERBOOKING_SUPERVISORES, 
+    APPL_CAPACIDADE.CD_ELO_STATUS,APPL_CAPACIDADE.CD_WEEK,APPL_CAPACIDADE.CD_POLO,
+    APPL_CAPACIDADE.CD_CENTRO_EXPEDIDOR,APPL_CAPACIDADE.CD_MACHINE,
+    APPL_CAPACIDADE.CD_ELO_CARTEIRA, APPL_CAPACIDADE.CD_ELO_AGENDAMENTO,APPL_CAPACIDADE.CD_ELO_AGENDAMENTO_ITEM,
+    APPL_CAPACIDADE.NU_CONTRATO_SAP,APPL_CAPACIDADE.CD_ITEM_CONTRATO,
+    APPL_CAPACIDADE.NU_ORDEM_VENDA,APPL_CAPACIDADE.CD_ITEM_PEDIDO,
+    APPL_CAPACIDADE.CD_INCOTERMS,APPL_CAPACIDADE.QT_AGENDADA_CONFIRMADA,APPL_CAPACIDADE.NU_ORDEM
+    ORDER BY APPL_CAPACIDADE.CD_WEEK, APPL_CAPACIDADE.CD_ELO_AGENDAMENTO, APPL_CAPACIDADE.NU_ORDEM DESC
+    
+    )
+    
+    SELECT 
+    CTE.QT_TOTAL_CONFIRMADA,
+    CTE.QT_CAPACIDADE_POLO_WTH_OVB_SUP,
+    CTE.QT_CAPACIDADE_CC_WTH_OVB_SUP,
+    CTE.QT_CAPACIDADE_MAQ_WTH_OVB_SUP,
+    CTE.QT_ACIMA_CAPACIDADE,
+    CTE.QT_AGENDADA_CONFIRMADA,
+    CTE.QT_AGENDADA_ACUMULADA,
+    CTE.QT_ACIMA_CAPAC_AGEND_ACUMUL,
+    CTE.QT_OVERBOOKING_SUPERVISORES, 
+    CTE.CD_ELO_STATUS,CTE.CD_WEEK,CTE.CD_POLO,
+    CTE.CD_CENTRO_EXPEDIDOR,CTE.CD_MACHINE,
+    CTE.CD_ELO_CARTEIRA, CTE.CD_ELO_AGENDAMENTO,CTE.CD_ELO_AGENDAMENTO_ITEM,
+    CTE.NU_CONTRATO_SAP,CTE.CD_ITEM_CONTRATO,
+    CTE.NU_ORDEM_VENDA,CTE.CD_ITEM_PEDIDO,
+    CTE.CD_INCOTERMS,CTE.NU_ORDEM,
+    'ACIMA' DS_CAPACIDADE
+    
+    FROM CTE_ACUMULADO CTE
+    WHERE QT_ACIMA_CAPAC_AGEND_ACUMUL > 0
+    UNION
+    SELECT --CTEMA.* 
+    CTEMA.QT_TOTAL_CONFIRMADA,
+    CTEMA.QT_CAPACIDADE_POLO_WTH_OVB_SUP,
+    CTEMA.QT_CAPACIDADE_CC_WTH_OVB_SUP,
+    CTEMA.QT_CAPACIDADE_MAQ_WTH_OVB_SUP,
+    CTEMA.QT_ACIMA_CAPACIDADE,
+    CTEMA.QT_AGENDADA_CONFIRMADA,
+    CTEMA.QT_AGENDADA_ACUMULADA,
+    CTEMA.QT_ACIMA_CAPAC_AGEND_ACUMUL,
+    CTEMA.QT_OVERBOOKING_SUPERVISORES, 
+    CTEMA.CD_ELO_STATUS,CTEMA.CD_WEEK,CTEMA.CD_POLO,
+    CTEMA.CD_CENTRO_EXPEDIDOR,CTEMA.CD_MACHINE,
+    CTEMA.CD_ELO_CARTEIRA, CTEMA.CD_ELO_AGENDAMENTO,CTEMA.CD_ELO_AGENDAMENTO_ITEM,
+    CTEMA.NU_CONTRATO_SAP,CTEMA.CD_ITEM_CONTRATO,
+    CTEMA.NU_ORDEM_VENDA,CTEMA.CD_ITEM_PEDIDO,
+    CTEMA.CD_INCOTERMS,CTEMA.NU_ORDEM,
+    'PARCIAL' DS_CAPACIDADE
+    
+    FROM CTE_ACUMULADO CTEMA
+    WHERE CTEMA.QT_ACIMA_CAPAC_AGEND_ACUMUL < 0
+    AND CTEMA.QT_ACIMA_CAPAC_AGEND_ACUMUL >= (SELECT MAX(CTEMAX.QT_ACIMA_CAPAC_AGEND_ACUMUL) 
+            FROM CTE_ACUMULADO CTEMAX WHERE CTEMAX.QT_ACIMA_CAPAC_AGEND_ACUMUL < 0 )
+;
+
+ 
+    BEGIN
+ 
+ 
+     FOR CA IN C_PROTOCOLO
+        LOOP
+
+          BEGIN
+            
+            UPDATE VND.ELO_CARTEIRA 
+            SET DS_CAPACIDADE = CA.DS_CAPACIDADE
+            WHERE CD_ELO_CARTEIRA = CA.CD_ELO_CARTEIRA;
+            
+            COMMIT;
+            EXCEPTION 
+            WHEN NO_DATA_FOUND THEN 
+                BEGIN
+                ROLLBACK;
+                END;
+            WHEN OTHERS THEN 
+                BEGIN
+                ROLLBACK;
+                END;
+            
+            END;                
+
+        END LOOP;
+        
+    IF C_PROTOCOLO%ISOPEN THEN
+      CLOSE C_PROTOCOLO;
+    END IF;
+
+    
+    END PU_ATUALIZA_CAPACIDADE;
+    
+    
+    
+    PROCEDURE PU_VERIFICA_AGENDAMENTO_CIF (
+        P_CD_POLO               IN VND.ELO_AGENDAMENTO.CD_POLO%TYPE,
+        P_CD_CENTRO_EXPEDIDOR   IN VND.ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE,
+        P_CD_MACHINE            IN VND.ELO_AGENDAMENTO.CD_MACHINE%TYPE,
+        P_CD_WEEK               IN VND.ELO_AGENDAMENTO.CD_WEEK%TYPE
+    )
+    IS
+        V_LIMIT         NUMBER := 500;
+        V_CD_SITE       CHAR(4);
+        V_SITE_TYPE     CHAR(1);
+        
+        -- Total per scheduling item and package.
+        -- To update ELO_AGENDAMENTO_DAY.
+        TYPE ITEM_PKG_R IS RECORD
+        (
+            CD_ELO_AGENDAMENTO_ITEM VND.ELO_AGENDAMENTO_WEEK.CD_ELO_AGENDAMENTO_ITEM%TYPE,
+            CD_GRUPO_EMBALAGEM      VND.ELO_CARTEIRA.CD_GRUPO_EMBALAGEM%TYPE,
+            QT_AGENDADA_CONFIRMADA  VND.ELO_AGENDAMENTO_DAY.NU_QUANTIDADE%TYPE
+        );
+        TYPE ITEMS_PKG_T IS TABLE OF ITEM_PKG_R;
+        T_ITEMS_PKG ITEMS_PKG_T;
+        
+        CURSOR C_ITEMS_PKG IS
+        WITH CRT AS (
+                        SELECT CA.CD_ELO_AGENDAMENTO_ITEM,
+                               NVL(SUM(CA.QT_AGENDADA_CONFIRMADA), 0) QT_AGENDADA_CONFIRMADA
+                          FROM VND.ELO_CARTEIRA CA
+                         INNER JOIN
+                               VND.ELO_AGENDAMENTO AG
+                               ON AG.CD_ELO_AGENDAMENTO = CA.CD_ELO_AGENDAMENTO
+                         WHERE (P_CD_WEEK IS NULL OR AG.CD_WEEK = P_CD_WEEK)
+                           AND (P_CD_POLO IS NULL OR AG.CD_POLO = P_CD_POLO)
+                           AND (P_CD_CENTRO_EXPEDIDOR IS NULL OR AG.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+                           AND (P_CD_MACHINE IS NULL OR AG.CD_MACHINE = P_CD_MACHINE)
+                           AND NVL(CA.QT_AGENDADA_CONFIRMADA, 0) > 0
+                           AND CA.CD_INCOTERMS = 'CIF'
+                           AND CA.IC_ATIVO = 'S'
+                         GROUP BY CA.CD_ELO_AGENDAMENTO_ITEM
+                    )
+        SELECT AI.CD_ELO_AGENDAMENTO_ITEM,
+               CA.CD_GRUPO_EMBALAGEM,
+               SUM(CA.QT_AGENDADA_CONFIRMADA) QT_AGENDADA_CONFIRMADA
+          FROM VND.ELO_AGENDAMENTO_WEEK AW
+         INNER JOIN 
+               CRT AI
+               ON AI.CD_ELO_AGENDAMENTO_ITEM = AW.CD_ELO_AGENDAMENTO_ITEM
+         INNER JOIN VND.ELO_CARTEIRA CA
+               ON CA.CD_ELO_AGENDAMENTO_ITEM = AI.CD_ELO_AGENDAMENTO_ITEM
+              AND NVL(CA.QT_AGENDADA_CONFIRMADA, 0) > 0
+         WHERE AI.QT_AGENDADA_CONFIRMADA <> AW.QT_SEMANA
+         GROUP BY AI.CD_ELO_AGENDAMENTO_ITEM,
+                  CA.CD_GRUPO_EMBALAGEM
+        ;
+        
+        -- Total per scheduling item.
+        -- To update ELO_AGENDAMENTO_WEEK.
+        TYPE ITEM_R IS RECORD
+        (
+            CD_ELO_AGENDAMENTO_ITEM VND.ELO_AGENDAMENTO_WEEK.CD_ELO_AGENDAMENTO_ITEM%TYPE,
+            QT_AGENDADA_CONFIRMADA  VND.ELO_AGENDAMENTO_WEEK.QT_SEMANA%TYPE
+        );
+        TYPE ITEMS_T IS TABLE OF ITEM_R;
+        T_ITEMS ITEMS_T;
+        
+        CURSOR C_ITEMS IS
+        WITH CRT AS (
+                        SELECT CA.CD_ELO_AGENDAMENTO_ITEM,
+                               NVL(SUM(CA.QT_AGENDADA_CONFIRMADA), 0) QT_AGENDADA_CONFIRMADA
+                          FROM VND.ELO_CARTEIRA CA
+                         INNER JOIN
+                               VND.ELO_AGENDAMENTO AG
+                               ON AG.CD_ELO_AGENDAMENTO = CA.CD_ELO_AGENDAMENTO
+                         WHERE (P_CD_WEEK IS NULL OR AG.CD_WEEK = P_CD_WEEK)
+                           AND (P_CD_POLO IS NULL OR AG.CD_POLO = P_CD_POLO)
+                           AND (P_CD_CENTRO_EXPEDIDOR IS NULL OR AG.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+                           AND (P_CD_MACHINE IS NULL OR AG.CD_MACHINE = P_CD_MACHINE)
+                           AND NVL(CA.QT_AGENDADA_CONFIRMADA, 0) > 0
+                           AND CA.CD_INCOTERMS = 'CIF'
+                           AND CA.IC_ATIVO = 'S'
+                         GROUP BY CA.CD_ELO_AGENDAMENTO_ITEM
+                    )
+        SELECT AI.CD_ELO_AGENDAMENTO_ITEM,
+               AI.QT_AGENDADA_CONFIRMADA
+          FROM VND.ELO_AGENDAMENTO_WEEK AW
+         INNER JOIN 
+               CRT AI
+               ON AI.CD_ELO_AGENDAMENTO_ITEM = AW.CD_ELO_AGENDAMENTO_ITEM
+         WHERE AI.QT_AGENDADA_CONFIRMADA <> AW.QT_SEMANA
+        ;
+    BEGIN
+        CASE
+            WHEN P_CD_POLO IS NOT NULL THEN
+                V_CD_SITE   := P_CD_POLO;
+                V_SITE_TYPE := 'P';
+            WHEN P_CD_CENTRO_EXPEDIDOR IS NOT NULL THEN
+                V_CD_SITE   := P_CD_CENTRO_EXPEDIDOR;
+                V_SITE_TYPE := 'C';
+            WHEN P_CD_MACHINE IS NOT NULL THEN
+                V_CD_SITE   := P_CD_MACHINE;
+                V_SITE_TYPE := 'M';
+            ELSE
+                RAISE_APPLICATION_ERROR(-20001, 'TIPO DE LOCAL INDEFINIDO');
+                RETURN;
+        END CASE;
+        
+        OPEN    C_ITEMS_PKG;                               
+        FETCH   C_ITEMS_PKG BULK COLLECT INTO T_ITEMS_PKG LIMIT V_LIMIT;
+        CLOSE   C_ITEMS_PKG;
+        --dbms_output.put_line(T_ITEMS_PKG.COUNT);
+        
+        OPEN    C_ITEMS;                               
+        FETCH   C_ITEMS BULK COLLECT INTO T_ITEMS LIMIT V_LIMIT;
+        CLOSE   C_ITEMS;
+        --dbms_output.put_line(T_ITEMS.COUNT);
+        
+        FOR I IN 1 .. T_ITEMS.COUNT
+        LOOP
+            DELETE FROM VND.ELO_AGENDAMENTO_DAY 
+             WHERE CD_ELO_AGENDAMENTO_WEEK IN (
+                        SELECT CD_ELO_AGENDAMENTO_WEEK
+                          FROM VND.ELO_AGENDAMENTO_WEEK
+                         WHERE CD_ELO_AGENDAMENTO_ITEM = T_ITEMS(I).CD_ELO_AGENDAMENTO_ITEM
+                   );
+        END LOOP;
+        
+        FOR J IN 1 .. T_ITEMS_PKG.COUNT
+        LOOP
+            --dbms_output.put_line(T_ITEMS_PKG(J).CD_ELO_AGENDAMENTO_ITEM || ': ' || T_ITEMS_PKG(J).QT_AGENDADA_CONFIRMADA || ' = ' || T_ITEMS_PKG(J).QT_AGENDADA_CONFIRMADA);
+            VND.GX_ELO_SCHEDULING.PI_AGENDAMENTO_DAY_FACTORY (
+                T_ITEMS_PKG(J).CD_ELO_AGENDAMENTO_ITEM,
+                1,
+                T_ITEMS_PKG(J).CD_GRUPO_EMBALAGEM,
+                T_ITEMS_PKG(J).QT_AGENDADA_CONFIRMADA,
+                P_CD_WEEK,
+                V_CD_SITE,
+                V_SITE_TYPE
+            );
+        END LOOP;
+        
+        -- Updates week quantities.    
+        FOR I IN 1 .. T_ITEMS.COUNT
+        LOOP
+            --dbms_output.put_line(T_ITEMS(I).CD_ELO_AGENDAMENTO_ITEM || ': ' || T_ITEMS(I).QT_AGENDADA_CONFIRMADA);
+            VND.GX_ELO_SCHEDULING.PI_AGENDAMENTO_WEEK_FACTORY(
+                T_ITEMS(I).CD_ELO_AGENDAMENTO_ITEM,
+                1,
+                T_ITEMS(I).QT_AGENDADA_CONFIRMADA
+            );
+        END LOOP;
+    
+    END PU_VERIFICA_AGENDAMENTO_CIF;
+
+
+
+    PROCEDURE PU_LIBERAR_TORRE_FRETES(
+        P_CD_POLO                       IN VND.ELO_AGENDAMENTO.CD_POLO%TYPE DEFAULT NULL,
+        P_CD_CENTRO_EXPEDIDOR           IN VND.ELO_AGENDAMENTO.CD_CENTRO_EXPEDIDOR%TYPE DEFAULT NULL,
+        P_CD_MACHINE                    IN VND.ELO_AGENDAMENTO.CD_MACHINE%TYPE DEFAULT NULL,
+        P_CD_WEEK                       IN VND.ELO_AGENDAMENTO.CD_WEEK%TYPE DEFAULT NULL,
+        P_RETORNO                       OUT T_CURSOR)
+    IS
+
+        V_TRAVA                 VARCHAR2(1):='N';
+
+        V_ST_CS_CAFIN  VND.ELO_CARTEIRA.CD_STATUS_CUSTOMER_SERVICE%TYPE; 
+        V_ST_TF_CANEW  VND.ELO_CARTEIRA.CD_STATUS_TORRE_FRETES%TYPE;
+        V_ST_CS_CAPRO  VND.ELO_CARTEIRA.CD_STATUS_CUSTOMER_SERVICE%TYPE; 
+
+        V_QT_CD_STATUS_CEL  VND.ELO_STATUS.CD_ELO_STATUS%TYPE;
+
+        CURSOR C_CARTEIRA IS
+        
+        WITH CTE_AGENDAMENTO AS 
+        (
+        SELECT AGE.CD_ELO_AGENDAMENTO , AGE.CD_ELO_STATUS
+        FROM VND.ELO_AGENDAMENTO AGE
+        WHERE 
+        AGE.CD_ELO_STATUS NOT IN (VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGENC'))
+        AND (P_CD_WEEK IS NULL OR AGE.CD_WEEK = P_CD_WEEK)
+        AND (P_CD_POLO IS NULL OR AGE.CD_POLO = P_CD_POLO)
+        AND (P_CD_CENTRO_EXPEDIDOR IS NULL OR AGE.CD_CENTRO_EXPEDIDOR = P_CD_CENTRO_EXPEDIDOR)
+        AND (P_CD_MACHINE IS NULL OR AGE.CD_MACHINE = P_CD_MACHINE)
+        
+        )
+        
+        
+        SELECT DISTINCT
+            EC.CD_ELO_CARTEIRA
+            ,EC.CD_INCOTERMS 
+            ,EC.QT_AGENDADA_CONFIRMADA
+            ,EC.CD_STATUS_CEL_FINAL
+        FROM VND.ELO_CARTEIRA EC
+        INNER JOIN CTE_AGENDAMENTO EA 
+        ON EC.CD_ELO_AGENDAMENTO = EA.CD_ELO_AGENDAMENTO
+        INNER JOIN VND.ELO_AGENDAMENTO_SUPERVISOR EAS ON EA.CD_ELO_AGENDAMENTO = EAS.CD_ELO_AGENDAMENTO
+        WHERE
+        (EC.CD_STATUS_CUSTOMER_SERVICE IS NOT NULL OR EC.QT_AGENDADA_CONFIRMADA > 0)                            
+        
+        AND 
+        ((EA.CD_ELO_STATUS  IN (VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGLOG'),  
+                                VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGCEL'), 
+                                 VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGPRE')) AND EC.QT_AGENDADA_CONFIRMADA > 0) 
+                OR (EC.CD_TIPO_AGENDAMENTO = VND.GX_ELO_COMMON.fx_elo_status('TIPAG', 'REPLAN') AND EC.CD_STATUS_REPLAN = 32 
+                AND NOT(EA.CD_ELO_STATUS =  VND.GX_ELO_COMMON.fx_elo_status('AGEND', 'AGENC'))
+                 )
+        )
+        AND EC.CD_INCOTERMS = 'CIF' AND EC.CD_STATUS_CEL_FINAL = VND.GX_ELO_COMMON.fx_elo_status('DOCCL', 'CLOOK')  ;
+
+
+        BEGIN
+        
+        V_ST_CS_CAFIN:=  VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CAFIN');
+        V_ST_TF_CANEW:=  VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CANEW');
+        V_ST_CS_CAPRO:=  VND.GX_ELO_COMMON.fx_elo_status('CARTE', 'CAPRO'); 
+        
+
+        FOR C_LINHA IN C_CARTEIRA
+        LOOP
+    
+            BEGIN
+            V_TRAVA:= 'N';
+
+                IF C_LINHA.CD_INCOTERMS = 'CIF' THEN 
+                    BEGIN
+                        UPDATE VND.ELO_CARTEIRA
+                        SET 
+                        CD_STATUS_TORRE_FRETES = NVL(CD_STATUS_TORRE_FRETES, V_ST_TF_CANEW), 
+                        CD_STATUS_CUSTOMER_SERVICE =  V_ST_CS_CAFIN,
+                        DH_LIBERACAO_TORRE_FRETES = NVL(DH_LIBERACAO_TORRE_FRETES, CURRENT_DATE)
+                        WHERE CD_ELO_CARTEIRA = C_LINHA.CD_ELO_CARTEIRA 
+                        --AND CD_STATUS_CEL_FINAL = 59;
+                        ;
+                        COMMIT;
+                        EXCEPTION 
+                        WHEN NO_DATA_FOUND THEN 
+                        BEGIN
+                        RAISE_APPLICATION_ERROR(-20001, 'ERRO ENCONTRADO 001 - '
+                        || SQLCODE || ' -ERROR- ' || SQLERRM );
+                        V_TRAVA:='S';
+                        END;
+    
+                        WHEN OTHERS THEN 
+                        BEGIN
+                        
+                        RAISE_APPLICATION_ERROR(-20001, 'ERRO ENCONTRADO 002 - '
+                        || SQLCODE || ' -ERROR- ' || SQLERRM );
+                        V_TRAVA:='S';
+                        END;
+            
+                    END;
+     
+                END IF;
+
+            END;
+
+        END LOOP;
+ 
+        
+        IF C_CARTEIRA%ISOPEN THEN
+            CLOSE C_CARTEIRA;
+        END IF;
+        
+        BEGIN        
+        UPDATE VND.ELO_CARTEIRA 
+        SET CD_STATUS_CUSTOMER_SERVICE = 12
+        WHERE 
+        DH_LIBERACAO_TORRE_FRETES IS NOT NULL 
+        AND CD_STATUS_TORRE_FRETES IS NOT NULL
+        AND NVL(CD_STATUS_CUSTOMER_SERVICE, 10) IN (10,11)
+        AND QT_AGENDADA_CONFIRMADA > 0
+        AND CD_STATUS_CEL_FINAL = 59
+        AND (CD_TIPO_AGENDAMENTO IN (22, 23, 24) OR (CD_TIPO_AGENDAMENTO = 25 AND CD_STATUS_REPLAN = 32)); 
+        COMMIT;
+        EXCEPTION 
+        WHEN NO_DATA_FOUND THEN 
+        BEGIN
+        V_TRAVA:='S';
+        END;
+        WHEN OTHERS THEN 
+        BEGIN
+        RAISE_APPLICATION_ERROR(-20001, 'ERRO ENCONTRADO 022 - '
+        || SQLCODE || ' -ERROR- ' || SQLERRM );
+        V_TRAVA:='S';
+        END;
+               
+        END;        
+
+        OPEN P_RETORNO FOR
+        SELECT '1' AS P_SUCESSO
+        FROM DUAL;
+        
+        
+        
+
+    EXCEPTION
+        WHEN OTHERS THEN
+            BEGIN
+            
+                RAISE_APPLICATION_ERROR(-20001, 'ERRO ENCONTRADO 003 - '
+                || SQLCODE || ' -ERROR- ' || SQLERRM );
+                OPEN P_RETORNO FOR
+                SELECT '0' AS P_SUCESSO
+                FROM DUAL;
+                ROLLBACK;
+            END;
+
+    END PU_LIBERAR_TORRE_FRETES;
+
+
+
+END GX_ELO_FACTORY;
+/
